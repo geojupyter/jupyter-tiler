@@ -2,9 +2,9 @@ import pytest
 from xarray import DataArray
 
 from jupyter_xarray_tiler.titiler import (
-    _get_server,
     add_data_array,
     get_routes,
+    get_server,
 )
 
 from .helpers import check_tile
@@ -13,8 +13,8 @@ from .params import params_for_backend
 
 def test_singleton_ish() -> None:
     """Test that the API only uses one TiTiler server instance."""
-    assert id(_get_server()) == id(_get_server())
-    assert _get_server() is _get_server()
+    assert id(get_server()) == id(get_server())
+    assert get_server() is get_server()
 
 
 @pytest.mark.usefixtures("clean_titiler_api")

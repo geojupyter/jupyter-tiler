@@ -2,16 +2,16 @@ from collections.abc import AsyncGenerator
 
 import pytest_asyncio
 
-from jupyter_xarray_tiler.titiler import _get_server as _get_titiler_server
-from jupyter_xarray_tiler.xpublish import _get_server as _get_xpublish_server
+from jupyter_xarray_tiler.titiler import get_server as get_titiler_server
+from jupyter_xarray_tiler.xpublish import get_server as get_xpublish_server
 
 
 async def _reset_titiler_api_for_testing() -> None:
     # Shutdown the previous server
-    server = _get_titiler_server()
+    server = get_titiler_server()
     await server.stop_tile_server()
     # Clear the cache so next time we'll get a fresh one
-    _get_titiler_server.cache_clear()
+    get_titiler_server.cache_clear()
 
 
 @pytest_asyncio.fixture
@@ -27,10 +27,10 @@ async def clean_titiler_api() -> AsyncGenerator[None]:
 
 async def _reset_xpublish_api_for_testing() -> None:
     # Shutdown the previous server
-    server = _get_xpublish_server()
+    server = get_xpublish_server()
     await server.stop_tile_server()
     # Clear the cache so next time we'll get a fresh one
-    _get_xpublish_server.cache_clear()
+    get_xpublish_server.cache_clear()
 
 
 @pytest_asyncio.fixture

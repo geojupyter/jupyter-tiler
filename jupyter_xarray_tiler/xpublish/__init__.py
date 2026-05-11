@@ -7,7 +7,7 @@ from jupyter_xarray_tiler.xpublish._server import XpublishServer
 
 
 @cache
-def _get_server() -> XpublishServer:
+def get_server() -> XpublishServer:
     return XpublishServer()
 
 
@@ -29,7 +29,7 @@ async def add_data_array(
     Returns:
         A URL pointing to the new tile endpoint.
     """
-    return await _get_server().add_data_array(
+    return await get_server().add_data_array(
         data_array,
         rescale=rescale,
         **kwargs,
@@ -47,7 +47,7 @@ def get_routes() -> list[dict[str, Any]]:
             Always ``await`` :func:`add_data_array` first.
     """
     try:
-        return _get_server().routes
+        return get_server().routes
     except RuntimeError as e:
         raise RuntimeError(
             "Server not started. Please `await add_data_array(...)` first."
