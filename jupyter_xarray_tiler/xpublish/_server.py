@@ -42,7 +42,7 @@ class XpublishServer(_FastApiTileServer):
         rescale: tuple[float, float] | None = None,
         **kwargs: str | int,
     ) -> str:
-        await self.start_tile_server()
+        await self.start()
 
         if self._port is None:
             raise RuntimeError(f"{_not_initialized_message} {_found_bug_message}")

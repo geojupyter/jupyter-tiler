@@ -47,12 +47,12 @@ class _FastApiTileServer(ABC):
             if isinstance(route, APIRoute)
         ]
 
-    async def start_tile_server(self) -> None:
+    async def start(self) -> None:
         """Start the tile server."""
         async with self._tile_server_lock:
             if self._tile_server_started.is_set():
                 return
-            self._tile_server_task = create_task(self._start_tile_server())
+            self._tile_server_task = create_task(self._start())
             await self._tile_server_started.wait()
 
     @abstractmethod
@@ -69,7 +69,7 @@ class _FastApiTileServer(ABC):
         """
         ...
 
-    async def stop_tile_server(self) -> None:
+    async def stop(self) -> None:
         """Stop the tile server."""
         task: Task[None] | None = None
         async with self._tile_server_lock:
@@ -81,7 +81,7 @@ class _FastApiTileServer(ABC):
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await task
 
-    async def _start_tile_server(self) -> None:
+    async def _start(self) -> None:
         self._app = self._init_fastapi_app()
 
         config = Config()

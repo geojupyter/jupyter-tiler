@@ -72,7 +72,7 @@ class TestTiTilerServerRestart:
         assert clean_titiler_server._tile_server_started.is_set()
 
         with anyio.fail_after(5):
-            await clean_titiler_server.stop_tile_server()
+            await clean_titiler_server.stop()
 
         assert not clean_titiler_server._tile_server_started.is_set()
         assert clean_titiler_server._port is None
@@ -87,8 +87,8 @@ class TestTiTilerServerRestart:
         port_before_restart = clean_titiler_server._port
 
         with anyio.fail_after(5):
-            await clean_titiler_server.stop_tile_server()
-            await clean_titiler_server.start_tile_server()
+            await clean_titiler_server.stop()
+            await clean_titiler_server.start()
 
         assert clean_titiler_server._tile_server_started.is_set()
         assert clean_titiler_server._port != port_before_restart
@@ -109,7 +109,7 @@ class TestTiTilerServerRestart:
     ) -> None:
         """Test that tiles are accessible from a layer added after a restart."""
         with anyio.fail_after(5):
-            await clean_titiler_server.stop_tile_server()
+            await clean_titiler_server.stop()
 
         proxy_url = await clean_titiler_server.add_data_array(
             data_array=mock_data_array
@@ -119,9 +119,9 @@ class TestTiTilerServerRestart:
 
     @pytest.mark.asyncio
     async def test_stop_tile_server_does_not_hang_during_startup(self) -> None:
-        """Test stop_tile_server() doesn't block if called during startup."""
+        """Test stop() doesn't block if called during startup."""
         server = TiTilerServer()
 
         with anyio.fail_after(5):
-            await server.start_tile_server()
-            await server.stop_tile_server()
+            await server.start()
+            await server.stop()

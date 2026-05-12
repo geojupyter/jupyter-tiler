@@ -9,7 +9,7 @@ from jupyter_xarray_tiler.xpublish import _get_server as _get_xpublish_server
 async def _reset_titiler_api_for_testing() -> None:
     # Shutdown the previous server
     server = _get_titiler_server()
-    await server.stop_tile_server()
+    await server.stop()
     # Clear the cache so next time we'll get a fresh one
     _get_titiler_server.cache_clear()
 
@@ -28,7 +28,7 @@ async def clean_titiler_api() -> AsyncGenerator[None]:
 async def _reset_xpublish_api_for_testing() -> None:
     # Shutdown the previous server
     server = _get_xpublish_server()
-    await server.stop_tile_server()
+    await server.stop()
     # Clear the cache so next time we'll get a fresh one
     _get_xpublish_server.cache_clear()
 

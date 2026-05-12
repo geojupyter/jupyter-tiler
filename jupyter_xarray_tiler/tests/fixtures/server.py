@@ -9,18 +9,18 @@ from jupyter_xarray_tiler.xpublish._server import XpublishServer
 @pytest_asyncio.fixture
 async def clean_titiler_server() -> AsyncGenerator[TiTilerServer]:
     server = TiTilerServer()
-    await server.start_tile_server()
+    await server.start()
     yield server
 
-    await server.stop_tile_server()
+    await server.stop()
     del server
 
 
 @pytest_asyncio.fixture
 async def clean_xpublish_server() -> AsyncGenerator[XpublishServer]:
     server = XpublishServer()
-    await server.start_tile_server()
+    await server.start()
     yield server
 
-    await server.stop_tile_server()
+    await server.stop()
     del server
