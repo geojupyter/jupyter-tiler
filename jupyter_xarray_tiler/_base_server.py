@@ -27,9 +27,9 @@ class _FastApiTileServer(ABC):
     def __init__(self) -> None:
         self._app: FastAPI | None = None
         self._port: int | None = None
-        self._tile_server_task: Task[None] | None = None
-        self._tile_server_started = Event()
-        self._tile_server_lock = Lock()
+        self._task: Task[None] | None = None
+        self._started = Event()
+        self._lock = Lock()
 
     @property
     def routes(self) -> list[dict[str, Any]]:
@@ -49,16 +49,16 @@ class _FastApiTileServer(ABC):
 
     async def start(self) -> None:
         """Start the tile server."""
-        async with self._tile_server_lock:
-            if self._tile_server_started.is_set():
+        async with self._lock:
+            if self._started.is_set():
                 return
 
-            self._tile_server_task = create_task(self._start())
+            self._task = create_task(self._start())
             try:
                 with anyio.fail_after(30):
-                    await self._tile_server_started.wait()
+                    await self._started.wait()
             except TimeoutError:
-                self._tile_server_task.cancel()
+                self._task.cancel()
                 raise
 
     @abstractmethod
@@ -78,9 +78,9 @@ class _FastApiTileServer(ABC):
     async def stop(self) -> None:
         """Stop the tile server."""
         task: Task[None] | None = None
-        async with self._tile_server_lock:
-            if self._tile_server_started.is_set():
-                task = self._tile_server_task
+        async with self._lock:
+            if self._started.is_set():
+                task = self._task
 
         if task is not None:
             task.cancel()
@@ -115,7 +115,7 @@ class _FastApiTileServer(ABC):
                     except OSError:
                         await anyio.sleep(0.05)
                     else:
-                        self._tile_server_started.set()
+                        self._started.set()
                         break
 
         finally:
@@ -123,8 +123,8 @@ class _FastApiTileServer(ABC):
             self._reset_state()
 
     def _reset_state(self) -> None:
-        self._tile_server_started.clear()
-        self._tile_server_task = None
+        self._started.clear()
+        self._task = None
         self._port = None
         self._app = None
 

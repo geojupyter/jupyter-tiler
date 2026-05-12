@@ -68,13 +68,13 @@ class TestTiTilerServerRestart:
         self,
         clean_titiler_server: TiTilerServer,
     ) -> None:
-        """Test that _tile_server_started is cleared so the server can be restarted."""
-        assert clean_titiler_server._tile_server_started.is_set()
+        """Test that _started is cleared so the server can be restarted."""
+        assert clean_titiler_server._started.is_set()
 
         with anyio.fail_after(5):
             await clean_titiler_server.stop()
 
-        assert not clean_titiler_server._tile_server_started.is_set()
+        assert not clean_titiler_server._started.is_set()
         assert clean_titiler_server._port is None
         assert clean_titiler_server._app is None
 
@@ -90,7 +90,7 @@ class TestTiTilerServerRestart:
             await clean_titiler_server.stop()
             await clean_titiler_server.start()
 
-        assert clean_titiler_server._tile_server_started.is_set()
+        assert clean_titiler_server._started.is_set()
         assert clean_titiler_server._port != port_before_restart
 
     @pytest.mark.asyncio
