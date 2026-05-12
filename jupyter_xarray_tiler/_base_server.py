@@ -3,6 +3,7 @@ from asyncio import Event, Lock, Task, create_task
 from functools import partial
 from typing import Any
 
+import anyio
 from anycorn import Config, serve
 from anyio import connect_tcp, create_task_group
 from fastapi import FastAPI
@@ -99,7 +100,7 @@ class _FastApiTileServer(ABC):
                 try:
                     await connect_tcp(host, self._port)
                 except OSError:
-                    pass
+                    await anyio.sleep(0.05)
                 else:
                     self._tile_server_started.set()
                     break
