@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 from abc import ABC, abstractmethod
 from asyncio import Event, Lock, Task, create_task
 from functools import partial
@@ -27,7 +29,6 @@ class _FastApiTileServer(ABC):
         self._port: int | None = None
         self._tile_server_task: Task[None] | None = None
         self._tile_server_started = Event()
-        self._tile_server_shutdown = Event()
         self._tile_server_lock = Lock()
 
     @property
@@ -70,9 +71,15 @@ class _FastApiTileServer(ABC):
 
     async def stop_tile_server(self) -> None:
         """Stop the tile server."""
+        task: Task[None] | None = None
         async with self._tile_server_lock:
             if self._tile_server_started.is_set():
-                self._tile_server_shutdown.set()
+                task = self._tile_server_task
+
+        if task is not None:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await task
 
     async def _start_tile_server(self) -> None:
         self._app = self._init_fastapi_app()
@@ -80,40 +87,39 @@ class _FastApiTileServer(ABC):
         config = Config()
         config.bind = "127.0.0.1:0"
 
-        async with create_task_group() as tg:
-            binds = await tg.start(
-                partial(
-                    serve,
-                    self._app,  # type: ignore[arg-type]
-                    config,
-                    shutdown_trigger=self._tile_server_shutdown.wait,  # type: ignore[arg-type]
-                    mode="asgi",
-                ),
-            )
+        try:
+            async with create_task_group() as tg:
+                binds = await tg.start(
+                    partial(
+                        serve,
+                        self._app,  # type: ignore[arg-type]
+                        config,
+                        mode="asgi",
+                    ),
+                )
 
-            # Host will always be 127.0.0.1, port is randomized
-            host, _port = binds[0][len("http://") :].split(":")
-            self._port = int(_port)
+                # Host will always be 127.0.0.1, port is randomized
+                host, _port = binds[0][len("http://") :].split(":")
+                self._port = int(_port)
 
-            # Poll until the TiTiler server is accepting connections
-            while True:
-                try:
-                    await connect_tcp(host, self._port)
-                except OSError:
-                    await anyio.sleep(0.05)
-                else:
-                    self._tile_server_started.set()
-                    break
+                # Poll until the TiTiler server is accepting connections
+                while True:
+                    try:
+                        await connect_tcp(host, self._port)
+                    except OSError:
+                        await anyio.sleep(0.05)
+                    else:
+                        self._tile_server_started.set()
+                        break
 
-        # Reset state on exiting task group (i.e. shutdown)
-        await self._reset_state()
+        finally:
+            # Reset state on exiting task group (i.e. shutdown)
+            self._reset_state()
 
-    async def _reset_state(self) -> None:
-        async with self._tile_server_lock:
-            self._tile_server_started.clear()
-            self._tile_server_shutdown.clear()
-            self._port = None
-            self._app = None
+    def _reset_state(self) -> None:
+        self._tile_server_started.clear()
+        self._port = None
+        self._app = None
 
     @abstractmethod
     def _init_fastapi_app(self) -> FastAPI:
