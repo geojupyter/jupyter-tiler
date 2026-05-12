@@ -102,7 +102,7 @@ class _FastApiTileServer(ABC):
                 host, _port = binds[0][len("http://") :].split(":")
                 self._port = int(_port)
 
-                # Poll until the TiTiler server is accepting connections
+                # Poll until the server is accepting connections
                 while True:
                     try:
                         await connect_tcp(host, self._port)
