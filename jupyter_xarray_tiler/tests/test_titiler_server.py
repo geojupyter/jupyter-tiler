@@ -1,3 +1,4 @@
+import anyio
 import pytest
 from xarray import DataArray
 
@@ -70,11 +71,13 @@ class TestTiTilerServerRestart:
         """Test that _tile_server_started is cleared so the server can be restarted."""
         assert clean_titiler_server._tile_server_started.is_set()
 
-        await clean_titiler_server.stop_tile_server()
-        if clean_titiler_server._tile_server_task:
-            await clean_titiler_server._tile_server_task
+        with anyio.fail_after(5):
+            await clean_titiler_server.stop_tile_server()
 
         assert not clean_titiler_server._tile_server_started.is_set()
+        assert not clean_titiler_server._tile_server_shutdown.is_set()
+        assert clean_titiler_server._port is None
+        assert clean_titiler_server._app is None
 
     @pytest.mark.asyncio
     async def test_server_binds_to_new_port_after_restart(
@@ -84,11 +87,9 @@ class TestTiTilerServerRestart:
         """Test restarted server binds to a fresh port."""
         port_before_restart = clean_titiler_server._port
 
-        await clean_titiler_server.stop_tile_server()
-        if clean_titiler_server._tile_server_task:
-            await clean_titiler_server._tile_server_task
-
-        await clean_titiler_server.start_tile_server()
+        with anyio.fail_after(5):
+            await clean_titiler_server.stop_tile_server()
+            await clean_titiler_server.start_tile_server()
 
         assert clean_titiler_server._tile_server_started.is_set()
         assert clean_titiler_server._port != port_before_restart
@@ -108,12 +109,20 @@ class TestTiTilerServerRestart:
         mock_data_array: DataArray,
     ) -> None:
         """Test that tiles are accessible from a layer added after a restart."""
-        await clean_titiler_server.stop_tile_server()
-        if clean_titiler_server._tile_server_task:
-            await clean_titiler_server._tile_server_task
+        with anyio.fail_after(5):
+            await clean_titiler_server.stop_tile_server()
 
         proxy_url = await clean_titiler_server.add_data_array(
             data_array=mock_data_array
         )
 
         await check_tile(proxy_url=proxy_url.format(z=z, y=y, x=x))
+
+    @pytest.mark.asyncio
+    async def test_stop_tile_server_does_not_hang_during_startup(self) -> None:
+        """Test stop_tile_server() doesn't block if called during startup."""
+        server = TiTilerServer()
+
+        with anyio.fail_after(5):
+            await server.start_tile_server()
+            await server.stop_tile_server()

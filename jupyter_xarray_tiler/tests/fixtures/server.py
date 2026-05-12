@@ -13,8 +13,6 @@ async def clean_titiler_server() -> AsyncGenerator[TiTilerServer]:
     yield server
 
     await server.stop_tile_server()
-    if server._tile_server_task:
-        await server._tile_server_task
     del server
 
 
@@ -25,6 +23,4 @@ async def clean_xpublish_server() -> AsyncGenerator[XpublishServer]:
     yield server
 
     await server.stop_tile_server()
-    if server._tile_server_task:
-        await server._tile_server_task
     del server
