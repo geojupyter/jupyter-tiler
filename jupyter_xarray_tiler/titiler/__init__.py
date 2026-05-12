@@ -8,7 +8,7 @@ from jupyter_xarray_tiler.titiler._server import TiTilerServer
 
 
 @cache
-def get_server() -> TiTilerServer:
+def _get_server() -> TiTilerServer:
     return TiTilerServer()
 
 
@@ -36,7 +36,7 @@ async def add_data_array(
     Returns:
         A URL pointing to the new tile endpoint.
     """
-    return await get_server().add_data_array(
+    return await _get_server().add_data_array(
         data_array,
         colormap_name=colormap_name,
         rescale=rescale,
@@ -57,7 +57,7 @@ def get_routes() -> list[dict[str, Any]]:
             Always ``await`` :func:`add_data_array` first.
     """
     try:
-        return get_server().routes
+        return _get_server().routes
     except RuntimeError as e:
         raise RuntimeError(
             "Server not started. Please `await add_data_array(...)` first."
