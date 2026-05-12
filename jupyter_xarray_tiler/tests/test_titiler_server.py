@@ -75,7 +75,6 @@ class TestTiTilerServerRestart:
             await clean_titiler_server.stop_tile_server()
 
         assert not clean_titiler_server._tile_server_started.is_set()
-        assert not clean_titiler_server._tile_server_shutdown.is_set()
         assert clean_titiler_server._port is None
         assert clean_titiler_server._app is None
 

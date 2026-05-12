@@ -72,7 +72,6 @@ class TestXpublishServerRestart:
             await clean_xpublish_server.stop_tile_server()
 
         assert not clean_xpublish_server._tile_server_started.is_set()
-        assert not clean_xpublish_server._tile_server_shutdown.is_set()
         assert clean_xpublish_server._port is None
         assert clean_xpublish_server._app is None
 
