@@ -52,8 +52,14 @@ class _FastApiTileServer(ABC):
         async with self._tile_server_lock:
             if self._tile_server_started.is_set():
                 return
+
             self._tile_server_task = create_task(self._start())
-            await self._tile_server_started.wait()
+            try:
+                with anyio.fail_after(30):
+                    await self._tile_server_started.wait()
+            except TimeoutError:
+                self._tile_server_task.cancel()
+                raise
 
     @abstractmethod
     async def add_data_array(
