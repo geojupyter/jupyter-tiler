@@ -124,6 +124,7 @@ class _FastApiTileServer(ABC):
 
     def _reset_state(self) -> None:
         self._tile_server_started.clear()
+        self._tile_server_task = None
         self._port = None
         self._app = None
 
