@@ -105,6 +105,9 @@ class _FastApiTileServer(ABC):
                     break
 
         # Reset state on exiting task group (i.e. shutdown)
+        await self._reset_state()
+
+    async def _reset_state(self) -> None:
         async with self._tile_server_lock:
             self._tile_server_started.clear()
             self._tile_server_shutdown.clear()
