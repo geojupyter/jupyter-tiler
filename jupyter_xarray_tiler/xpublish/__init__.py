@@ -23,7 +23,7 @@ async def add_data_array(
     The xpublish-tiles server is lazily started when the first DataArray is added.
 
     Args:
-        colormap_range: The range of values `(min, max)` to be colormapped
+        colormap_range: The range of data values `(min, max)` to be colormapped
         kwargs: Additional query parameters to include in the TiTiler request URL.
 
     Returns:

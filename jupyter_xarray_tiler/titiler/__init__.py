@@ -30,7 +30,7 @@ async def add_data_array(
         colormap_name: A `rio-tiler`-supported colormap name.
             See the [TiTiler algorithm docs](https://developmentseed.org/titiler/examples/notebooks/Working_with_Algorithm)
             for details.
-        colormap_range: The range of values `(min, max)` to be colormapped
+        colormap_range: The range of data values `(min, max)` to be colormapped
         tile_dim_scale: Tile size scale. Default `1` corresponds to 256*256px tiles.
         algorithm: A TiTiler algorithm class.
             See the [TiTiler algorithm docs](https://developmentseed.org/titiler/examples/notebooks/Working_with_Algorithm)
