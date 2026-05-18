@@ -18,7 +18,7 @@ async def add_data_array(
     # ...,
     **kwargs: str | int,
 ) -> str:
-    """Adds a DataArray to the xpublish-tiles server and returns a URL template.
+    """Adds a DataArray to the xpublish-tiles server.
 
     The xpublish-tiles server is lazily started when the first DataArray is added.
 
@@ -27,7 +27,7 @@ async def add_data_array(
         kwargs: Additional query parameters to include in the TiTiler request URL.
 
     Returns:
-        A URL pointing to the new tile endpoint.
+        A URL template pointing to the new tile endpoint.
     """
     return await _get_server().add_data_array(
         data_array,

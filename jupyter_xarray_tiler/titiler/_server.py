@@ -44,6 +44,7 @@ class TiTilerServer(_FastApiTileServer):
         algorithm: BaseAlgorithm | None = None,
         **kwargs: str | int,
     ) -> str:
+        """Add a data array to the TiTiler server."""
         await self.start()
 
         if self._port is None:

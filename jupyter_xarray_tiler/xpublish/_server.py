@@ -42,6 +42,7 @@ class XpublishServer(_FastApiTileServer):
         colormap_range: tuple[float, float] | None = None,
         **kwargs: str | int,
     ) -> str:
+        """Add a data array to the Xpublish server."""
         await self.start()
 
         if self._port is None:

@@ -21,20 +21,24 @@ async def add_data_array(
     algorithm: BaseAlgorithm | None = None,
     **kwargs: str | int,
 ) -> str:
-    """Adds a DataArray to the TiTiler server and returns a URL template.
+    """Adds a DataArray to the TiTiler server.
 
     The TiTiler server is lazily started when the first DataArray is added.
 
     Args:
         data_array: An Xarray DataArray to dynamically tile for visualization.
-        colormap_name: A rio-tiler colormap name.
+        colormap_name: A `rio-tiler`-supported colormap name.
+            See the [TiTiler algorithm docs](https://developmentseed.org/titiler/examples/notebooks/Working_with_Algorithm)
+            for details.
         colormap_range: The range of values `(min, max)` to be colormapped
         tile_dim_scale: Tile size scale. Default `1` corresponds to 256*256px tiles.
-        algorithm: Custom TiTiler algorithm name, e.g. "hillshade".
+        algorithm: A TiTiler algorithm class.
+            See the [TiTiler algorithm docs](https://developmentseed.org/titiler/examples/notebooks/Working_with_Algorithm)
+            for details.
         kwargs: Additional query parameters to include in the TiTiler request URL.
 
     Returns:
-        A URL pointing to the new tile endpoint.
+        A URL template pointing to the new tile endpoint.
     """
     return await _get_server().add_data_array(
         data_array,
