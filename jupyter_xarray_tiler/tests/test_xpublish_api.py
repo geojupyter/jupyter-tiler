@@ -37,6 +37,6 @@ async def test_add_data_array_works(
     mock_data_array: DataArray,
 ) -> None:
     """Test that tiles can be accessed after a data array is added to the server."""
-    proxy_url = await add_data_array(data_array=mock_data_array, rescale=(0, 1))
+    proxy_url = await add_data_array(data_array=mock_data_array, colormap_range=(0, 1))
 
     await check_tile(proxy_url=proxy_url.format(z=z, y=y, x=x))

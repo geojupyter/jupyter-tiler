@@ -14,7 +14,7 @@ def _get_server() -> XpublishServer:
 async def add_data_array(
     data_array: DataArray,
     *,
-    rescale: tuple[float, float] | None = None,
+    colormap_range: tuple[float, float] | None = None,
     # ...,
     **kwargs: str | int,
 ) -> str:
@@ -23,7 +23,7 @@ async def add_data_array(
     The xpublish-tiles server is lazily started when the first DataArray is added.
 
     Args:
-        rescale: Comma (',') delimited Min,Max range.
+        colormap_range: The range of values `(min, max)` to be colormapped
         kwargs: Additional query parameters to include in the TiTiler request URL.
 
     Returns:
@@ -31,7 +31,7 @@ async def add_data_array(
     """
     return await _get_server().add_data_array(
         data_array,
-        rescale=rescale,
+        colormap_range=colormap_range,
         **kwargs,
     )
 

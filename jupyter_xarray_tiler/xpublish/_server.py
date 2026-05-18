@@ -39,7 +39,7 @@ class XpublishServer(_FastApiTileServer):
         self,
         data_array: DataArray,
         *,
-        rescale: tuple[float, float] | None = None,
+        colormap_range: tuple[float, float] | None = None,
         **kwargs: str | int,
     ) -> str:
         await self.start()
@@ -66,8 +66,8 @@ class XpublishServer(_FastApiTileServer):
             **_param_defaults,
             **kwargs,
         }
-        if rescale is not None:
-            _params["colorscalerange"] = f"{rescale[0]},{rescale[1]}"
+        if colormap_range is not None:
+            _params["colorscalerange"] = f"{colormap_range[0]},{colormap_range[1]}"
 
         return (
             f"{self._base_url}/datasets/{source_id}/tiles/WebMercatorQuad"

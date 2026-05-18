@@ -39,8 +39,8 @@ class TiTilerServer(_FastApiTileServer):
         data_array: DataArray,
         *,
         colormap_name: str = "viridis",
-        rescale: tuple[float, float] | None = None,
-        scale: int = 1,
+        colormap_range: tuple[float, float] | None = None,
+        tile_dim_scale: int = 1,
         algorithm: BaseAlgorithm | None = None,
         **kwargs: str | int,
     ) -> str:
@@ -57,13 +57,13 @@ class TiTilerServer(_FastApiTileServer):
         )
 
         _params = {
-            "scale": str(scale),
+            "scale": str(tile_dim_scale),
             "colormap_name": colormap_name,
             "reproject": "max",
             **kwargs,
         }
-        if rescale is not None:
-            _params["rescale"] = f"{rescale[0]},{rescale[1]}"
+        if colormap_range is not None:
+            _params["rescale"] = f"{colormap_range[0]},{colormap_range[1]}"
         if algorithm is not None:
             _params["algorithm"] = "algorithm"
 

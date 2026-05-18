@@ -66,7 +66,7 @@ class _FastApiTileServer(ABC):
         self,
         data_array: DataArray,
         *,
-        rescale: tuple[float, float] | None = None,
+        colormap_range: tuple[float, float] | None = None,
         **kwargs: Any,  # noqa: ANN401
     ) -> str:
         """Add a data array to the tile server and return a URL template.
