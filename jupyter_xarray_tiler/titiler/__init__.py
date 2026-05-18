@@ -27,13 +27,13 @@ async def add_data_array(
 
     Args:
         data_array: An Xarray DataArray to dynamically tile for visualization.
-        colormap_name: A `rio-tiler`-supported colormap name.
-            See the [TiTiler algorithm docs](https://developmentseed.org/titiler/examples/notebooks/Working_with_Algorithm)
+        colormap_name: A ``rio-tiler``-supported colormap name.
+            See the `TiTiler algorithm docs <https://developmentseed.org/titiler/examples/notebooks/Working_with_Algorithm>`_
             for details.
-        colormap_range: The range of data values `(min, max)` to be colormapped
-        tile_dim_scale: Tile size scale. Default `1` corresponds to 256*256px tiles.
+        colormap_range: The range of data values ``(min, max)`` to be colormapped
+        tile_dim_scale: Tile size scale. Default ``1`` corresponds to 256*256px tiles.
         algorithm: A TiTiler algorithm class.
-            See the [TiTiler algorithm docs](https://developmentseed.org/titiler/examples/notebooks/Working_with_Algorithm)
+            See the `TiTiler algorithm docs <https://developmentseed.org/titiler/examples/notebooks/Working_with_Algorithm>`_
             for details.
         kwargs: Additional query parameters to include in the TiTiler request URL.
 
