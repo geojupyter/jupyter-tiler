@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from fastapi.routing import APIRoute
 from xarray import DataArray
 
-from jupyter_xarray_tiler.constants._messages import (
+from jupyter_geotiler.constants._messages import (
     _found_bug_message,
     _not_initialized_message,
 )

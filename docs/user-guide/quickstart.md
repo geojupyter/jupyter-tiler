@@ -1,11 +1,11 @@
 # Quickstart
 
 As an author of a an interactive map library for Jupyter, you might use
-`jupyter-xarray-tiler` to provide the ability to dynamically visualize data in Xarray
+`jupyter-geotiler` to provide the ability to dynamically visualize data in Xarray
 DataArrays without writing to a file like so:
 
 ```python
-from jupyter_xarray_tiler.titiler import add_data_array
+from jupyter_geotiler.titiler import add_data_array
 
 
 class MyMapLibrary:

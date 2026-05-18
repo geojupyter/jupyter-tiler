@@ -8,7 +8,7 @@ def jp_server_config(jp_server_config: Any) -> dict[str, Any]:  # noqa: ANN401
     return {
         "ServerApp": {
             "jpserver_extensions": {
-                "jupyter_xarray_tiler": True,
+                "jupyter_geotiler": True,
             },
         },
     }

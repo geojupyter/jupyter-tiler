@@ -1,7 +1,7 @@
 from pathlib import Path
 
 # Discover all modules in the tests.fixtures subpackage
-FIXTURES_MODULE = ["jupyter_xarray_tiler", "tests", "fixtures"]
+FIXTURES_MODULE = ["jupyter_geotiler", "tests", "fixtures"]
 fixtures_dir = Path(__file__).parent.joinpath(*FIXTURES_MODULE)
 fixture_plugins = [
     f"{'.'.join(FIXTURES_MODULE)}.{path.stem}"

@@ -12,13 +12,13 @@ If you're using it with JupyterLab, it requires JupyterLab >= 4.0.0
 `````````{tabs}
 ``````{group-tab} uv (recommended)
 ```bash
-uv add jupyter-xarray-tiler
+uv add jupyter-geotiler
 ```
 ``````
 
 ``````{group-tab} pip
 ```bash
-pip install jupyter-xarray-tiler
+pip install jupyter-geotiler
 ```
 ``````
 `````````
@@ -33,13 +33,13 @@ Install from source or see the [contributing instuctions](/contributor-guide/ind
 `````````{tabs}
 ``````{group-tab} Pixi (recommended)
 ```bash
-pixi add jupyter-xarray-tiler
+pixi add jupyter-geotiler
 ```
 ``````
 
 ``````{group-tab} conda/mamba/micromamba
 ```bash
-conda install jupyter-xarray-tiler
+conda install jupyter-geotiler
 ```
 
 You can substitute `conda` in this command for `mamba` or `micromamba` as appropriate.
@@ -56,13 +56,13 @@ If you prefer to install from a local clone, view the
 `````````{tabs}
 ``````{group-tab} uv (recommended)
 ```bash
-uv add git+https://github.com/geojupyter/jupyter-xarray-tiler.git#egg=jupyter-xarray-tiler
+uv add git+https://github.com/geojupyter/jupyter-geotiler.git#egg=jupyter-geotiler
 ```
 ``````
 
 ``````{group-tab} pip
 ```bash
-pip install git+https://github.com/geojupyter/jupyter-xarray-tiler.git#egg=jupyter-xarray-tiler
+pip install git+https://github.com/geojupyter/jupyter-geotiler.git#egg=jupyter-geotiler
 ```
 ``````
 `````````
@@ -74,25 +74,25 @@ Depending on how you installed:
 `````````{tabs}
 ``````{group-tab} uv (recommended)
 ```bash
-uv remove jupyter-xarray-tiler
+uv remove jupyter-geotiler
 ```
 ``````
 
 ``````{group-tab} pip
 ```bash
-pip uninstall jupyter-xarray-tiler
+pip uninstall jupyter-geotiler
 ```
 ``````
 
 ``````{group-tab} Pixi (recommended)
 ```bash
-pixi remove jupyter-xarray-tiler
+pixi remove jupyter-geotiler
 ```
 ``````
 
 ``````{group-tab} conda/mamba/micromamba
 ```bash
-conda uninstall jupyter-xarray-tiler
+conda uninstall jupyter-geotiler
 ```
 
 You can substitute `conda` in this command for `mamba` or `micromamba` as appropriate.

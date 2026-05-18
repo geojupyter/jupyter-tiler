@@ -10,8 +10,8 @@ from titiler.core.errors import DEFAULT_STATUS_CODES, add_exception_handlers
 from titiler.core.factory import TilerFactory
 from xarray import DataArray
 
-from jupyter_xarray_tiler._base_server import _FastApiTileServer
-from jupyter_xarray_tiler.constants._messages import (
+from jupyter_geotiler._base_server import _FastApiTileServer
+from jupyter_geotiler.constants._messages import (
     _found_bug_message,
     _not_initialized_message,
 )

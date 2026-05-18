@@ -1,4 +1,4 @@
-# `jupyter-xarray-tiler` Documentation
+# `jupyter-geotiler` Documentation
 
 ```{toctree}
 :maxdepth: 1
@@ -8,9 +8,9 @@ user-guide/index
 contributor-guide/index
 ```
 
-Thank you for trying out `jupyter-xarray-tiler`!
+Thank you for trying out `jupyter-geotiler`!
 
-![High-level diagram of `jupyter-xarray-tiler`](/assets/images/high-level-diagram.svg)
+![High-level diagram of `jupyter-geotiler`](/assets/images/high-level-diagram.svg)
 
 ## Who is this for?
 

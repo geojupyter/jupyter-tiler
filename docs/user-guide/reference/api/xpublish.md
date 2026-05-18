@@ -1,6 +1,6 @@
 # `xpublish` module
 
 ```{eval-rst}
-.. automodule:: jupyter_xarray_tiler.xpublish
+.. automodule:: jupyter_geotiler.xpublish
    :members:
 ```

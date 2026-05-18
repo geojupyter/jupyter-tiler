@@ -92,7 +92,7 @@ exclude = [".github"]
 "_jupyter-config/server-config" = "etc/jupyter/jupyter_server_config.d"
 
 [tool.hatch.build.hooks.version]
-path = "jupyter_xarray_tiler/_version.py"
+path = "jupyter_geotiler/_version.py"
 
 [tool.jupyter-releaser.options]
 version_cmd = "hatch version"
@@ -101,7 +101,7 @@ version_cmd = "hatch version"
 ignore = ["W002"]
 
 [tool.mypy]
-packages = ["jupyter_xarray_tiler"]
+packages = ["jupyter_geotiler"]
 python_version = "3.12"
 strict = true
 

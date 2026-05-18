@@ -18,5 +18,5 @@ and `pip` if you prefer, but it's more complicated!
 ## Uninstall
 
 ```bash
-uv remove jupyter-xarray-tiler
+uv remove jupyter-geotiler
 ```

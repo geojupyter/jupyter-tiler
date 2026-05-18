@@ -1,7 +1,7 @@
 {
   "ServerApp": {
     "jpserver_extensions": {
-      "jupyter_xarray_tiler": true
+      "jupyter_geotiler": true
     }
   }
 }

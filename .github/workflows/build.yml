@@ -30,7 +30,7 @@ jobs:
         run: |
           set -eux
           uv run jupyter server extension list
-          uv run jupyter server extension list 2>&1 | grep -ie "jupyter_xarray_tiler.*OK"
+          uv run jupyter server extension list 2>&1 | grep -ie "jupyter_geotiler.*OK"
 
       - name: "Test"
         run: "uv run pytest -vv -r ap --cov"
@@ -42,7 +42,7 @@ jobs:
         uses: "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" # v7.0.1
         with:
           name: "extension-artifacts"
-          path: "dist/jupyter_xarray_tiler*"
+          path: "dist/jupyter_geotiler*"
           if-no-files-found: "error"
 
   test_isolated:
@@ -64,10 +64,10 @@ jobs:
 
       - name: "Install from wheel"
         run: |
-          uv pip install --system "jupyterlab>=4.0.0,<5" jupyter_xarray_tiler*.whl
+          uv pip install --system "jupyterlab>=4.0.0,<5" jupyter_geotiler*.whl
 
       - name: "Check the server extension is installed"
         run: |
           set -eux
           jupyter server extension list
-          jupyter server extension list 2>&1 | grep -ie "jupyter_xarray_tiler.*OK"
+          jupyter server extension list 2>&1 | grep -ie "jupyter_geotiler.*OK"
