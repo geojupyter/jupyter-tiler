@@ -28,7 +28,7 @@ async def add_data_array(
     Args:
         data_array: An Xarray DataArray to dynamically tile for visualization.
         colormap_name: A ``rio-tiler``-supported colormap name.
-            See the `TiTiler algorithm docs <https://developmentseed.org/titiler/examples/notebooks/Working_with_Algorithm>`_
+            See the `rio-tiler docs <https://cogeotiff.github.io/rio-tiler/latest/api/rio_tiler/colormap/#rio_tiler.colormap.ColorMaps.list>`_
             for details.
         colormap_range: The range of data values ``(min, max)`` to be colormapped
         tile_dim_scale: Tile size scale. Default ``1`` corresponds to 256*256px tiles.
