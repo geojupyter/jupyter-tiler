@@ -1,6 +1,6 @@
 [project]
-name = "jupyter-xarray-tiler"
-description = "A Jupyter server extension providing a TiTiler server, proxy, and a Python API to add Xarray datasets to the TiTiler server."
+name = "jupyter-geotiler"
+description = "A Jupyter extension providing a TiTiler server, proxy, and a Python API to add Xarray datasets to the TiTiler server."
 authors = [
     {name = "GeoJupyter community", email = "geojupyter@gmail.com"},
 ]
@@ -40,9 +40,9 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/geojupyter/jupyter-xarray-tiler.git"
-Homepage = "https://github.com/geojupyter/jupyter-xarray-tiler"
-Issues = "https://github.com/geojupyter/jupyter-xarray-tiler/issues"
+Repository = "https://github.com/geojupyter/jupyter-geotiler.git"
+Homepage = "https://github.com/geojupyter/jupyter-geotiler"
+Issues = "https://github.com/geojupyter/jupyter-geotiler/issues"
 
 [dependency-groups]
 dev = [
