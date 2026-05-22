@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, Path("..").resolve())
 
-project = "jupyter-geotiler"
+project = "jupyter-tiler"
 copyright = "2026, GeoJupyter"  # noqa: A001
 author = "GeoJupyter Community"
 
@@ -72,9 +72,9 @@ html_theme = "pydata_sphinx_theme"
 
 html_theme_options = {
     "logo": {
-        "text": "jupyter-geotiler",
+        "text": "jupyter-tiler",
     },
-    "github_url": "https://github.com/geojupyter/jupyter-geotiler",
+    "github_url": "https://github.com/geojupyter/jupyter-tiler",
     "use_edit_page_button": True,
     "show_prev_next": False,
     "navbar_end": ["theme-switcher", "navbar-icon-links"],
@@ -83,7 +83,7 @@ html_theme_options = {
 
 html_context = {
     "github_user": "geojupyter",
-    "github_repo": "jupyter-geotiler",
+    "github_repo": "jupyter-tiler",
     "github_version": "main",
     "doc_path": "docs",
 }

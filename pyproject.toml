@@ -1,5 +1,5 @@
 [project]
-name = "jupyter-geotiler"
+name = "jupyter-tiler"
 description = "A Jupyter extension providing a TiTiler server, proxy, and a Python API to add Xarray datasets to the TiTiler server."
 authors = [
     {name = "GeoJupyter community", email = "geojupyter@gmail.com"},
@@ -40,9 +40,9 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/geojupyter/jupyter-geotiler.git"
-Homepage = "https://github.com/geojupyter/jupyter-geotiler"
-Issues = "https://github.com/geojupyter/jupyter-geotiler/issues"
+Repository = "https://github.com/geojupyter/jupyter-tiler.git"
+Homepage = "https://github.com/geojupyter/jupyter-tiler"
+Issues = "https://github.com/geojupyter/jupyter-tiler/issues"
 
 [dependency-groups]
 dev = [
@@ -92,7 +92,7 @@ exclude = [".github"]
 "_jupyter-config/server-config" = "etc/jupyter/jupyter_server_config.d"
 
 [tool.hatch.build.hooks.version]
-path = "jupyter_geotiler/_version.py"
+path = "jupyter_tiler/_version.py"
 
 [tool.jupyter-releaser.options]
 version_cmd = "hatch version"
@@ -101,7 +101,7 @@ version_cmd = "hatch version"
 ignore = ["W002"]
 
 [tool.mypy]
-packages = ["jupyter_geotiler"]
+packages = ["jupyter_tiler"]
 python_version = "3.12"
 strict = true
 

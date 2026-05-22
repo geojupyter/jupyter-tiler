@@ -2,7 +2,7 @@ import anyio
 import pytest
 from xarray import DataArray
 
-from jupyter_geotiler.titiler._server import TiTilerServer
+from jupyter_tiler.titiler._server import TiTilerServer
 
 from .helpers import check_tile
 from .params import params_for_backend

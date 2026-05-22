@@ -28,7 +28,7 @@ jobs:
     runs-on: "ubuntu-latest"
     environment:
       name: "pypi"
-      url: "https://pypi.org/p/jupyter-geotiler"
+      url: "https://pypi.org/p/jupyter-tiler"
     permissions:
       id-token: "write"
     steps:

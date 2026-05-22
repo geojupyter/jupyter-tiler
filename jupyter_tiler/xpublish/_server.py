@@ -7,8 +7,8 @@ from xarray import DataArray, Dataset
 from xpublish.utils.api import DATASET_ID_ATTR_KEY
 from xpublish_tiles.xpublish.tiles.plugin import TilesPlugin
 
-from jupyter_geotiler._base_server import _FastApiTileServer
-from jupyter_geotiler.constants._messages import (
+from jupyter_tiler._base_server import _FastApiTileServer
+from jupyter_tiler.constants._messages import (
     _found_bug_message,
     _not_initialized_message,
 )

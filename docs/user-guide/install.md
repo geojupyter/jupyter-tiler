@@ -12,13 +12,13 @@ If you're using it with JupyterLab, it requires JupyterLab >= 4.0.0
 `````````{tabs}
 ``````{group-tab} uv (recommended)
 ```bash
-uv add jupyter-geotiler
+uv add jupyter-tiler
 ```
 ``````
 
 ``````{group-tab} pip
 ```bash
-pip install jupyter-geotiler
+pip install jupyter-tiler
 ```
 ``````
 `````````
@@ -33,13 +33,13 @@ Install from source or see the [contributing instuctions](/contributor-guide/ind
 `````````{tabs}
 ``````{group-tab} Pixi (recommended)
 ```bash
-pixi add jupyter-geotiler
+pixi add jupyter-tiler
 ```
 ``````
 
 ``````{group-tab} conda/mamba/micromamba
 ```bash
-conda install jupyter-geotiler
+conda install jupyter-tiler
 ```
 
 You can substitute `conda` in this command for `mamba` or `micromamba` as appropriate.
@@ -56,13 +56,13 @@ If you prefer to install from a local clone, view the
 `````````{tabs}
 ``````{group-tab} uv (recommended)
 ```bash
-uv add git+https://github.com/geojupyter/jupyter-geotiler.git#egg=jupyter-geotiler
+uv add git+https://github.com/geojupyter/jupyter-tiler.git#egg=jupyter-tiler
 ```
 ``````
 
 ``````{group-tab} pip
 ```bash
-pip install git+https://github.com/geojupyter/jupyter-geotiler.git#egg=jupyter-geotiler
+pip install git+https://github.com/geojupyter/jupyter-tiler.git#egg=jupyter-tiler
 ```
 ``````
 `````````
@@ -74,25 +74,25 @@ Depending on how you installed:
 `````````{tabs}
 ``````{group-tab} uv (recommended)
 ```bash
-uv remove jupyter-geotiler
+uv remove jupyter-tiler
 ```
 ``````
 
 ``````{group-tab} pip
 ```bash
-pip uninstall jupyter-geotiler
+pip uninstall jupyter-tiler
 ```
 ``````
 
 ``````{group-tab} Pixi (recommended)
 ```bash
-pixi remove jupyter-geotiler
+pixi remove jupyter-tiler
 ```
 ``````
 
 ``````{group-tab} conda/mamba/micromamba
 ```bash
-conda uninstall jupyter-geotiler
+conda uninstall jupyter-tiler
 ```
 
 You can substitute `conda` in this command for `mamba` or `micromamba` as appropriate.

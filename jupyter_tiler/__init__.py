@@ -1,9 +1,9 @@
 from jupyter_server.serverapp import ServerApp
 
-from jupyter_geotiler.constants._jupyter import SERVER_EXTENSION_NAME
+from jupyter_tiler.constants._jupyter import SERVER_EXTENSION_NAME
 
 try:
-    from jupyter_geotiler._version import __version__
+    from jupyter_tiler._version import __version__
 except ImportError:
     # Fallback when using the package in dev mode without installing
     # in editable mode with pip:

@@ -1,6 +1,6 @@
 # `titiler` module
 
 ```{eval-rst}
-.. automodule:: jupyter_geotiler.titiler
+.. automodule:: jupyter_tiler.titiler
    :members:
 ```

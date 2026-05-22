@@ -2,7 +2,7 @@ import anyio
 import pytest
 from xarray import DataArray
 
-from jupyter_geotiler.xpublish._server import XpublishServer
+from jupyter_tiler.xpublish._server import XpublishServer
 
 from .helpers import check_tile
 from .params import params_for_backend

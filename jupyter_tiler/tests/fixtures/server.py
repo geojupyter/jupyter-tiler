@@ -2,8 +2,8 @@ from collections.abc import AsyncGenerator
 
 import pytest_asyncio
 
-from jupyter_geotiler.titiler._server import TiTilerServer
-from jupyter_geotiler.xpublish._server import XpublishServer
+from jupyter_tiler.titiler._server import TiTilerServer
+from jupyter_tiler.xpublish._server import XpublishServer
 
 
 @pytest_asyncio.fixture

@@ -1,7 +1,7 @@
 import pytest
 from xarray import DataArray
 
-from jupyter_geotiler.xpublish import (
+from jupyter_tiler.xpublish import (
     _get_server,
     add_data_array,
     get_routes,

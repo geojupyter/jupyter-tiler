@@ -1,4 +1,4 @@
-# `jupyter-geotiler` Documentation
+# `jupyter-tiler` Documentation
 
 ```{toctree}
 :maxdepth: 1
@@ -8,9 +8,9 @@ user-guide/index
 contributor-guide/index
 ```
 
-Thank you for trying out `jupyter-geotiler`!
+Thank you for trying out `jupyter-tiler`!
 
-![High-level diagram of `jupyter-geotiler`](/assets/images/high-level-diagram.svg)
+![High-level diagram of `jupyter-tiler`](/assets/images/high-level-diagram.svg)
 
 ## Who is this for?
 

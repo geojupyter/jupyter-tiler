@@ -1,11 +1,11 @@
 # Jupyter GeoTiler
 
-[![PyPI - Version](https://img.shields.io/pypi/v/jupyter-geotiler)](https://pypi.org/project/jupyter-geotiler/)
-[![PyPI - Downloads](https://img.shields.io/pypi/dm/jupyter-geotiler)](https://pypi.org/project/jupyter-geotiler/)
-![License](https://img.shields.io/github/license/geojupyter/jupyter-geotiler)
-[![ReadTheDocs Status](https://readthedocs.org/projects/jupyter-geotiler/badge/?version=latest)](https://jupyter-geotiler.readthedocs.io)
-[![Github Actions Status - Build](https://github.com/geojupyter/jupyter-geotiler/workflows/Build/badge.svg)](https://github.com/geojupyter/jupyter-geotiler/actions/workflows/build.yml)
-[![Github Actions Status - Typecheck](https://github.com/geojupyter/jupyter-geotiler/workflows/Typecheck/badge.svg)](https://github.com/geojupyter/jupyter-geotiler/actions/workflows/typecheck.yml)
+[![PyPI - Version](https://img.shields.io/pypi/v/jupyter-tiler)](https://pypi.org/project/jupyter-tiler/)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/jupyter-tiler)](https://pypi.org/project/jupyter-tiler/)
+![License](https://img.shields.io/github/license/geojupyter/jupyter-tiler)
+[![ReadTheDocs Status](https://readthedocs.org/projects/jupyter-tiler/badge/?version=latest)](https://jupyter-tiler.readthedocs.io)
+[![Github Actions Status - Build](https://github.com/geojupyter/jupyter-tiler/workflows/Build/badge.svg)](https://github.com/geojupyter/jupyter-tiler/actions/workflows/build.yml)
+[![Github Actions Status - Typecheck](https://github.com/geojupyter/jupyter-tiler/workflows/Typecheck/badge.svg)](https://github.com/geojupyter/jupyter-tiler/actions/workflows/typecheck.yml)
 
 > [!IMPORTANT]
 > This repository is experimental and in the prototype stage.
@@ -55,7 +55,7 @@ to map servers running in the kernel.
 As a Jupyter interactive map library author, you may implement a method like:
 
 ```python
-from jupyter_geotiler.titiler import add_data_array
+from jupyter_tiler.titiler import add_data_array
 
 
 class MyMapLibrary:
@@ -76,7 +76,7 @@ class MyMapLibrary:
 Recommended:
 
 ```bash
-uv add jupyter-geotiler
+uv add jupyter-tiler
 ```
 
 Or:
@@ -86,25 +86,25 @@ Or:
 > Please use another installation method!
 
 ```bash
-pixi add jupyter-geotiler
+pixi add jupyter-tiler
 ```
 
 For other methods of installation, including pip, conda, mamba, and micromamba, see the
-[installation instructions in the documentation](https://jupyter-geotiler.readthedocs.io/en/latest/user-guide/install/).
+[installation instructions in the documentation](https://jupyter-tiler.readthedocs.io/en/latest/user-guide/install/).
 
 ### From source
 
 ```bash
-uv add git+https://github.com/geojupyter/jupyter-geotiler.git#egg=jupyter-geotiler
+uv add git+https://github.com/geojupyter/jupyter-tiler.git#egg=jupyter-tiler
 ```
 
 For _development_ instructions, please view the
-[development install instructions in our documentation's Contributor Guide](https://jupyter-geotiler.readthedocs.io/en/latest/contributor-guide/how-tos/development-install/)!
+[development install instructions in our documentation's Contributor Guide](https://jupyter-tiler.readthedocs.io/en/latest/contributor-guide/how-tos/development-install/)!
 
 ## Contributing
 
 Please see the
-[Contributor Guide in our documentation](https://jupyter-geotiler.readthedocs.io/en/latest/contributor-guide/)!
+[Contributor Guide in our documentation](https://jupyter-tiler.readthedocs.io/en/latest/contributor-guide/)!
 
 ## :rocket: Powered by...
 

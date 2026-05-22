@@ -2,8 +2,8 @@ from collections.abc import AsyncGenerator
 
 import pytest_asyncio
 
-from jupyter_geotiler.titiler import _get_server as _get_titiler_server
-from jupyter_geotiler.xpublish import _get_server as _get_xpublish_server
+from jupyter_tiler.titiler import _get_server as _get_titiler_server
+from jupyter_tiler.xpublish import _get_server as _get_xpublish_server
 
 
 async def _reset_titiler_api_for_testing() -> None:

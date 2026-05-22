@@ -18,5 +18,5 @@ and `pip` if you prefer, but it's more complicated!
 ## Uninstall
 
 ```bash
-uv remove jupyter-geotiler
+uv remove jupyter-tiler
 ```

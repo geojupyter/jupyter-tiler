@@ -3,7 +3,7 @@ from typing import Any
 
 from xarray import DataArray
 
-from jupyter_geotiler.xpublish._server import XpublishServer
+from jupyter_tiler.xpublish._server import XpublishServer
 
 
 @cache
