@@ -1,4 +1,4 @@
-# Jupyter GeoTiler
+# Jupyter Tiler
 
 [![PyPI - Version](https://img.shields.io/pypi/v/jupyter-tiler)](https://pypi.org/project/jupyter-tiler/)
 [![PyPI - Downloads](https://img.shields.io/pypi/dm/jupyter-tiler)](https://pypi.org/project/jupyter-tiler/)
