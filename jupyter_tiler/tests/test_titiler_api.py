@@ -1,9 +1,13 @@
+import numpy as np
 import pytest
+from rio_tiler.models import ImageData
 from xarray import DataArray
 
 from jupyter_tiler.titiler import (
     _get_server,
     add_data_array,
+    add_stac_array,
+    default_array_to_image,
     get_routes,
 )
 
@@ -41,3 +45,40 @@ async def test_add_data_array_works(
     assert len(get_routes()) > 0
 
     await check_tile(proxy_url=proxy_url.format(z=z, y=y, x=x))
+
+
+@pytest.mark.usefixtures("clean_titiler_api")
+@pytest.mark.asyncio
+async def test_add_stac_array_uses_custom_collection_and_assets() -> None:
+    """Test add_stac_array returns a URL with custom collection path and query params."""
+
+    def ndwi_process(_array: DataArray) -> ImageData:
+        raise NotImplementedError
+
+    proxy_url = await add_stac_array(
+        stac_url="https://planetarycomputer.microsoft.com/api/stac/v1",
+        array_to_image=ndwi_process,
+        collection_id="sentinel-2-l2a",
+        assets=["B03", "B08"],
+        datetime="2024-01-01/2024-12-31",
+    )
+
+    assert (
+        "/collections/sentinel-2-l2a/tiles/WebMercatorQuad/{z}/{x}/{y}.png"
+        in proxy_url
+    )
+    assert "datetime=2024-01-01%2F2024-12-31" in proxy_url
+
+
+def test_default_array_to_image_handles_empty_time_dimension() -> None:
+    """Test default STAC converter returns transparent image for empty tiles."""
+    empty = DataArray(
+        np.empty((0, 1, 1, 1), dtype=np.float32),
+        dims=("time", "band", "y", "x"),
+        coords={"time": [], "band": [1], "y": [0], "x": [0]},
+    )
+
+    image = default_array_to_image(empty)
+
+    assert image.array.shape == (1, 1, 1)
+    assert image.array.mask.all()
