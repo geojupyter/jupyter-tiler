@@ -37,6 +37,8 @@ dependencies = [
     "titiler-core>=1.1.1",
     "titiler-xarray>=1.1.1",
     "xpublish-tiles>=0.4.2",
+    "pystac-client",
+    "stackstac"
 ]
 
 [project.urls]

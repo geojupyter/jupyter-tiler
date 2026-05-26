@@ -1,8 +1,10 @@
 import uuid
+from collections.abc import Callable
 from urllib.parse import urlencode
 
 from fastapi import FastAPI
 from rio_tiler.io.xarray import XarrayReader
+from rio_tiler.models import ImageData
 from titiler.core.algorithm import algorithms as default_algorithms
 from titiler.core.algorithm.base import BaseAlgorithm
 from titiler.core.dependencies import DefaultDependency
@@ -15,6 +17,7 @@ from jupyter_tiler.constants._messages import (
     _found_bug_message,
     _not_initialized_message,
 )
+from jupyter_tiler.titiler._xarray_stac_backend import XarraySTACTilerFactory
 
 
 class TiTilerServer(_FastApiTileServer):
@@ -74,6 +77,60 @@ class TiTilerServer(_FastApiTileServer):
             f"?{urlencode(_params)}"
         )
 
+    async def add_stac_array(
+        self,
+        stac_url: str,
+        array_to_image: Callable[[DataArray], ImageData],
+        collection_id: str,
+        *,
+        assets: list[str] | None = None,
+        max_items: int = 4,
+        resolution_scale: float = 2.0,
+        resampling: str = "nearest",
+        num_threads: int = 1,
+        viewport_width: int = 640,
+        viewport_height: int = 360,
+        viewport_resampling: str = "linear",
+        **kwargs: str | int,
+    ) -> str:
+        """Add a data array to the TiTiler server."""
+        if max_items < 1:
+            raise ValueError("max_items must be >= 1")
+        if resolution_scale <= 0:
+            raise ValueError("resolution_scale must be > 0")
+        if num_threads < 1:
+            raise ValueError("num_threads must be >= 1")
+        if viewport_width < 0 or viewport_height < 0:
+            raise ValueError("viewport_width and viewport_height must be >= 0")
+
+        await self.start()
+
+        if self._port is None:
+            raise RuntimeError(f"{_not_initialized_message} {_found_bug_message}")
+
+        source_id = str(uuid.uuid4())
+        self._add_stac_array_route(
+            source_id=source_id,
+            stac_url=stac_url,
+            assets=assets,
+            max_items=max_items,
+            resolution_scale=resolution_scale,
+            resampling=resampling,
+            num_threads=num_threads,
+            viewport_width=viewport_width,
+            viewport_height=viewport_height,
+            viewport_resampling=viewport_resampling,
+            array_to_image=array_to_image,
+        )
+
+        query = urlencode(kwargs)
+        query_suffix = f"?{query}" if query else ""
+
+        return (
+            f"{self._base_url}/{source_id}/collections/{collection_id}/tiles/WebMercatorQuad/{{z}}/{{x}}/{{y}}.png"
+            f"{query_suffix}"
+        )
+
     def _add_data_array_route(  # type: ignore[override]
         self,
         *,
@@ -94,5 +151,41 @@ class TiTilerServer(_FastApiTileServer):
             path_dependency=lambda: data_array,
             reader_dependency=DefaultDependency,
             process_dependency=algorithms.dependency,
+        )
+        self._app.include_router(tiler.router, prefix=f"/{source_id}")
+
+    def _add_stac_array_route(  # type: ignore[override]
+        self,
+        *,
+        source_id: str,
+        stac_url: str,
+        array_to_image: Callable[[DataArray], ImageData],
+        assets: list[str] | None = None,
+        max_items: int = 4,
+        resolution_scale: float = 2.0,
+        resampling: str = "nearest",
+        num_threads: int = 1,
+        viewport_width: int = 0,
+        viewport_height: int = 0,
+        viewport_resampling: str = "linear",
+    ) -> None:
+        if self._app is None:
+            raise RuntimeError(f"{_not_initialized_message} {_found_bug_message}")
+
+        # titiler.stacapi dependencies read the STAC API URL from app.state.stac_url.
+        self._app.state.stac_url = stac_url
+
+        tiler = XarraySTACTilerFactory(
+            stac_url=stac_url,
+            assets=assets,
+            max_items=max_items,
+            resolution_scale=resolution_scale,
+            resampling=resampling,
+            num_threads=num_threads,
+            viewport_width=viewport_width,
+            viewport_height=viewport_height,
+            viewport_resampling=viewport_resampling,
+            array_to_image=array_to_image,
+            router_prefix=f"/{source_id}",
         )
         self._app.include_router(tiler.router, prefix=f"/{source_id}")

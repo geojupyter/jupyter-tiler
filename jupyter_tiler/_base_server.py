@@ -3,6 +3,7 @@ import contextlib
 import os
 from abc import ABC, abstractmethod
 from asyncio import Event, Lock, Task, create_task
+from collections.abc import Callable
 from functools import partial
 from typing import Any
 
@@ -11,6 +12,7 @@ from anycorn import Config, serve
 from anyio import connect_tcp, create_task_group
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
+from rio_tiler.models import ImageData
 from xarray import DataArray
 
 from jupyter_tiler.constants._messages import (
@@ -139,6 +141,16 @@ class _FastApiTileServer(ABC):
 
     @abstractmethod
     def _add_data_array_route(
+        self,
+        *,
+        source_id: str,
+        stac_url: str,
+        array_to_image: Callable[[DataArray], ImageData],
+        **kwargs: Any,  # noqa: ANN401
+    ) -> None: ...
+
+    @abstractmethod
+    def _add_stac_array_route(
         self,
         *,
         source_id: str,

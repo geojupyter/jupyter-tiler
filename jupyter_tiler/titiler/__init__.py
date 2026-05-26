@@ -1,6 +1,9 @@
+from collections.abc import Callable
 from functools import cache
 from typing import Any
 
+import numpy as np
+from rio_tiler.models import ImageData
 from titiler.core.algorithm.base import BaseAlgorithm
 from xarray import DataArray
 
@@ -46,6 +49,182 @@ async def add_data_array(
         colormap_range=colormap_range,
         tile_dim_scale=tile_dim_scale,
         algorithm=algorithm,
+        **kwargs,
+    )
+
+
+def transparent_image(width: int = 256, height: int = 256) -> ImageData:
+    arr = np.ma.masked_all((1, height, width), dtype=np.uint8)
+
+    return ImageData(
+        arr,
+        assets=None,
+        crs=None,
+        bounds=None,
+    )
+
+
+def default_array_to_image(xr: DataArray) -> ImageData:
+    """
+    Convert a stackstac xarray.DataArray into rio-tiler ImageData.
+
+    Output:
+        ImageData usable by titiler render functions.
+    """
+    height = xr.sizes.get("y", 256)
+    width = xr.sizes.get("x", 256)
+
+    if "time" in xr.dims and xr.sizes["time"] == 0:
+        return transparent_image(width, height)
+
+    if "band" in xr.dims and xr.sizes["band"] == 0:
+        return transparent_image(width, height)
+
+    data = xr.isel(time=0) if "time" in xr.dims else xr
+    if "band" not in data.dims:
+        data = data.expand_dims(dim="band", axis=0)
+
+    arr = data.data
+
+    if hasattr(arr, "compute"):
+        arr = arr.compute()
+
+    if not np.ma.isMaskedArray(arr):
+        arr = np.ma.masked_invalid(arr)
+
+    if arr.size == 0 or np.ma.count(arr) == 0:
+        return transparent_image(width, height)
+
+    if arr.shape[0] >= 3:
+        arr = arr[:3, :, :]
+    elif arr.shape[0] == 2:
+        arr = np.ma.concatenate((arr, arr[1:2, :, :]), axis=0)
+
+    if arr.dtype != np.uint8:
+        scaled = np.ma.empty_like(arr, dtype=np.float32)
+        for band_idx in range(arr.shape[0]):
+            band = arr[band_idx]
+            if np.ma.count(band) == 0:
+                scaled[band_idx] = np.ma.masked_all(band.shape, dtype=np.float32)
+                continue
+
+            band_values = band.compressed()
+            band_min = float(np.nanpercentile(band_values, 2))
+            band_max = float(np.nanpercentile(band_values, 98))
+            if np.isclose(band_max, band_min):
+                band_max = band_min + 1.0
+
+            scaled_band = (band - band_min) / (band_max - band_min)
+            scaled[band_idx] = np.ma.clip(scaled_band, 0.0, 1.0)
+
+        arr = (scaled * 255).astype(np.uint8)
+
+    return ImageData(
+        arr,
+        assets=None,
+        crs=str(data.rio.crs) if hasattr(data, "rio") else None,
+        bounds=data.rio.bounds() if hasattr(data, "rio") else None,
+    )
+
+
+async def add_stac_array(
+    stac_url: str,
+    collection_id: str,
+    array_to_image: Callable[[DataArray], ImageData] | None = None,
+    *,
+    assets: list[str] | None = None,
+    max_items: int = 4,
+    resolution_scale: float = 2.0,
+    resampling: str = "nearest",
+    num_threads: int = 1,
+    viewport_width: int = 0,
+    viewport_height: int = 0,
+    viewport_resampling: str = "linear",
+    **kwargs: str | int,
+) -> str:
+    """Add a STAC API source to the TiTiler server.
+
+    The default ``array_to_image`` works for most multi-band and single-band stacks:
+    it computes the first time slice, masks invalid values, applies robust percentile
+    scaling, and returns an ``ImageData`` tile.
+
+    Args:
+        stac_url: Root STAC API URL.
+        array_to_image: Optional callable converting a stackstac ``DataArray`` to
+            ``ImageData``. If omitted, :func:`default_array_to_image` is used.
+        collection_id: STAC collection ID used in the tile URL path.
+        assets: Optional STAC asset names passed to stackstac.
+        max_items: Max number of STAC items to combine per tile. Lower is faster.
+        resolution_scale: Multiplier applied to stackstac output resolution.
+            Values greater than ``1`` reduce detail and improve performance.
+        resampling: stackstac resampling method, e.g. ``nearest`` or ``bilinear``.
+        num_threads: Number of worker threads for stack computation.
+            Use ``1`` for highest responsiveness under many concurrent requests.
+        viewport_width: Optional target viewport width in pixels for post-stack
+            downsampling. ``0`` disables viewport resampling.
+        viewport_height: Optional target viewport height in pixels for post-stack
+            downsampling. ``0`` disables viewport resampling.
+        viewport_resampling: Interpolation method for viewport downsampling.
+            Typical values are ``linear`` or ``nearest``.
+        kwargs: Extra query parameters appended to the tile URL.
+
+    Returns:
+        A URL template pointing to the new STAC tile endpoint.
+
+    Example:
+        NDWI process function for use with a JupyterGIS-style API:
+
+        .. code-block:: python
+
+            import numpy as np
+            from rio_tiler.models import ImageData
+
+            def ndwi_process(stack):
+                height = stack.sizes.get("y", 256)
+                width = stack.sizes.get("x", 256)
+
+                if "time" in stack.dims and stack.sizes["time"] == 0:
+                    return ImageData(np.ma.masked_all((1, height, width), dtype=np.uint8))
+
+                # stackstac band coordinates can be string labels ("B03", "B08")
+                # or numeric values (1, 2, ...) depending on source metadata.
+                data = stack.isel(time=0) if "time" in stack.dims else stack
+
+                if "band" not in data.dims or data.sizes["band"] < 2:
+                    return ImageData(np.ma.masked_all((1, height, width), dtype=np.uint8))
+
+                try:
+                    green = data.sel(band="B03").data.astype(np.float32)
+                    nir = data.sel(band="B08").data.astype(np.float32)
+                except Exception:
+                    # Fallback for unlabeled/numeric band coords.
+                    # Assumes assets=["B03", "B08"] order.
+                    green = data.isel(band=0).data.astype(np.float32)
+                    nir = data.isel(band=1).data.astype(np.float32)
+
+                ndwi = (green - nir) / (green + nir + 1e-6)
+                ndwi = np.ma.masked_invalid(ndwi)
+                ndwi_01 = np.ma.clip((ndwi + 1.0) / 2.0, 0.0, 1.0)
+                return ImageData((ndwi_01[np.newaxis, :, :] * 255).astype(np.uint8))
+
+            # User-facing integration in a map widget:
+            # doc.add_stac_array_layer(stac_url, ndwi_process)
+    """
+    if array_to_image is None:
+        array_to_image = default_array_to_image
+
+    return await _get_server().add_stac_array(
+        stac_url=stac_url,
+        collection_id=collection_id,
+        assets=assets,
+        max_items=max_items,
+        resolution_scale=resolution_scale,
+        resampling=resampling,
+        num_threads=num_threads,
+        viewport_width=viewport_width,
+        viewport_height=viewport_height,
+        viewport_resampling=viewport_resampling,
+        array_to_image=array_to_image,
         **kwargs,
     )
 

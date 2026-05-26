@@ -1,5 +1,6 @@
 import anyio
 import pytest
+from rio_tiler.models import ImageData
 from xarray import DataArray
 
 from jupyter_tiler.titiler._server import TiTilerServer
@@ -60,6 +61,33 @@ class TestTiTilerServer:
         assert "/tiles/WebMercatorQuad/{z}/{x}/{y}.png" in tile_url
         assert "colormap_name=viridis" in tile_url
         assert "scale=1" in tile_url
+
+    @pytest.mark.asyncio
+    async def test_add_stac_array_returns_valid_tile_url(
+        self,
+        clean_titiler_server: TiTilerServer,
+    ) -> None:
+        """Test that adding a STAC source returns a properly formatted tile URL."""
+
+        def passthrough(_array: DataArray) -> ImageData:
+            raise NotImplementedError
+
+        tile_url = await clean_titiler_server.add_stac_array(
+            stac_url="https://planetarycomputer.microsoft.com/api/stac/v1",
+            array_to_image=passthrough,
+            collection_id="sentinel-2-l2a",
+            assets=["B03", "B08"],
+            datetime="2024-01-01/2024-12-31",
+        )
+
+        assert tile_url is not None
+        assert "/proxy/" in tile_url
+        assert f"/{clean_titiler_server._port}/" in tile_url
+        assert (
+            "/collections/sentinel-2-l2a/tiles/WebMercatorQuad/{z}/{x}/{y}.png"
+            in tile_url
+        )
+        assert "datetime=2024-01-01%2F2024-12-31" in tile_url
 
 
 class TestTiTilerServerRestart:
