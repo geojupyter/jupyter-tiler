@@ -167,6 +167,8 @@ class XarraySTACTilerFactory(BaseFactory):
 
     array_to_image: Callable[[xarray.DataArray], ImageData]
 
+    stac_url: str
+
     def register_routes(self):
         self.tile()
 
@@ -196,7 +198,7 @@ class XarraySTACTilerFactory(BaseFactory):
             x: Annotated[
                 int,
                 Path(
-                    description="Column (X) index of the tile on the selected TileMatrix. It cannot exceed the MatrixHeight-1 for the selected TileMatrix.",
+                    description="Column (X) index of the tile on the seleced TileMatrix. It cannot exceed the MatrixHeight-1 for the selected TileMatrix.",
                 ),
             ],
             y: Annotated[
@@ -224,11 +226,15 @@ class XarraySTACTilerFactory(BaseFactory):
             search=Depends(self.search_dependency),
             backend_params=Depends(self.backend_dependency),
             assets_accessor_params=Depends(self.assets_accessor_dependency),
-            colormap=Depends(self.colormap_dependency),
+            # colormap=Depends(self.colormap_dependency),
             render_params=Depends(self.render_dependency),
         ):
             """Create map tile from a dataset."""
             tms = self.supported_tms.get(tileMatrixSetId)
+
+            backend_kwargs = backend_params.as_dict()
+            backend_kwargs.setdefault("api_params", {})
+            backend_kwargs["api_params"]["url"] = self.stac_url
 
             with self.backend(
                 search,
@@ -248,7 +254,7 @@ class XarraySTACTilerFactory(BaseFactory):
             content, media_type = self.render_func(
                 image,
                 output_format=format,
-                colormap=colormap,
+                # colormap=colormap,
                 **render_params.as_dict(),
             )
 

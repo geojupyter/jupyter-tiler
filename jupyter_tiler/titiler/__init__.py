@@ -1,6 +1,8 @@
+from collections.abc import Callable
 from functools import cache
 from typing import Any
 
+from rio_tiler.models import ImageData
 from titiler.core.algorithm.base import BaseAlgorithm
 from xarray import DataArray
 
@@ -46,6 +48,21 @@ async def add_data_array(
         colormap_range=colormap_range,
         tile_dim_scale=tile_dim_scale,
         algorithm=algorithm,
+        **kwargs,
+    )
+
+
+async def add_stac_array(
+    self,
+    stac_url: str,
+    # TODO Provide a default?
+    array_to_image: Callable[[DataArray], ImageData],
+    **kwargs: str | int,
+) -> str:
+    """TODO"""
+    return await _get_server().add_stac_array(
+        stac_url=stac_url,
+        array_to_image=array_to_image,
         **kwargs,
     )
 
