@@ -142,5 +142,6 @@ ignore = [
   "SLF001",  # Forbid private member access
 ]
 "*.ipynb" = [
-    "T201",  # Forbid print calls
+    "T201",    # Forbid print calls
+    "ERA001",  # Forbid commented-out code
 ]
