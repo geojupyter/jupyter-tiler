@@ -68,13 +68,13 @@ docs = [
 # Dependencies for playing with the extension with real data, e.g. test
 # notebooks in the `examples` directory:
 play = [
+    "cartopy>=0.25.0",
+    "dask",
+    "jupyterlab_execute_time",
     "leafmap",
     "mapclassify",
     "odc-stac",
     "pystac-client",
-    "dask",
-    "jupyterlab_execute_time",
-    "cartopy>=0.25.0",
 ]
 
 
