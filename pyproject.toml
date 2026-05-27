@@ -70,6 +70,7 @@ docs = [
 play = [
     "cartopy>=0.25.0",
     "dask",
+    "distributed",
     "gcsfs",
     "jupyterlab_execute_time",
     "leafmap",
