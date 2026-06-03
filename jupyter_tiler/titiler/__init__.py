@@ -2,6 +2,7 @@ from collections.abc import Callable
 from functools import cache
 from typing import Any
 
+import numpy as np
 from rio_tiler.models import ImageData
 from titiler.core.algorithm.base import BaseAlgorithm
 from xarray import DataArray
@@ -51,12 +52,43 @@ async def add_data_array(
         **kwargs,
     )
 
+def default_array_to_image(xr: DataArray) -> ImageData:
+    """
+    Convert a stackstac xarray.DataArray into rio-tiler ImageData.
+
+    Expected input dimensions:
+        ("time", "band", "y", "x")
+
+    Output:
+        ImageData usable by titiler render functions.
+    """
+
+    # Mosaic along time dimension using first valid pixel
+    data = xr.max(dim="time", skipna=True)
+
+    # Convert to numpy
+    arr = data.data
+
+    # Ensure masked array
+    if not np.ma.isMaskedArray(arr):
+        arr = np.ma.masked_invalid(arr)
+
+    # stackstac output is usually float64
+    # convert to uint8 for rendering
+    if arr.dtype != np.uint8:
+        arr = np.clip(arr, 0, 255).astype(np.uint8)
+
+    return ImageData(
+        arr,
+        assets=None,
+        crs=str(xr.rio.crs) if hasattr(xr, "rio") else None,
+        bounds=xr.rio.bounds() if hasattr(xr, "rio") else None,
+    )
+
 
 async def add_stac_array(
-    self,
     stac_url: str,
-    # TODO Provide a default?
-    array_to_image: Callable[[DataArray], ImageData],
+    array_to_image: Callable[[DataArray], ImageData] = default_array_to_image,
     **kwargs: str | int,
 ) -> str:
     """TODO"""

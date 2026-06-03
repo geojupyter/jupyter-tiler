@@ -134,17 +134,9 @@ class TiTilerServer(_FastApiTileServer):
         if self._app is None:
             raise RuntimeError(f"{_not_initialized_message} {_found_bug_message}")
 
-        algorithms = default_algorithms
-        if algorithm is not None:
-            algorithms = default_algorithms.register({"algorithm": algorithm})
-
         tiler = XarraySTACTilerFactory(
             stac_url=stac_url,
             array_to_image=array_to_image,
             router_prefix=f"/{source_id}",
-            reader=XarrayReader,
-            path_dependency=lambda: data_array,
-            reader_dependency=DefaultDependency,
-            process_dependency=algorithms.dependency,
         )
         self._app.include_router(tiler.router, prefix=f"/{source_id}")

@@ -177,7 +177,6 @@ class XarraySTACTilerFactory(BaseFactory):
     ############################################################################
     def tile(self):
         """Register /tiles endpoint."""
-
         @self.router.get(
             "/collections/{collection_id}/tiles/{tileMatrixSetId}/{z}/{x}/{y}",
             operation_id=f"{self.operation_prefix}getTile",
