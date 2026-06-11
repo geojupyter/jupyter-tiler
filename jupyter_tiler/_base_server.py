@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import os
 from abc import ABC, abstractmethod
 from asyncio import Event, Lock, Task, create_task
 from functools import partial
@@ -151,4 +152,6 @@ class _FastApiTileServer(ABC):
         if self._port is None:
             raise RuntimeError(f"{_not_initialized_message} {_found_bug_message}")
 
-        return f"/proxy/{self._port}"
+        prefix = os.environ.get("JUPYTERHUB_SERVICE_PREFIX", "").rstrip("/")
+
+        return f"{prefix}/proxy/{self._port}"
