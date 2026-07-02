@@ -186,7 +186,6 @@ class XarraySTACAPIBackend(STACAPIBackend):
         max_items: int = 4,
         resolution_scale: float = 2.0,
         resampling: str = "nearest",
-        num_threads: int = 1,
         viewport_width: int = 0,
         viewport_height: int = 0,
         viewport_resampling: str = "linear",
@@ -244,12 +243,6 @@ class XarraySTACAPIBackend(STACAPIBackend):
             method=viewport_resampling,
         )
 
-        if num_threads > 1:
-            xr_stack = xr_stack.compute(
-                scheduler="threads",
-                num_workers=num_threads,
-            )
-
         # if xr_stack.sizes.get("time", 0) == 0 or xr_stack.sizes.get("band", 0) == 0:
         #     raise NoAssetFoundError(
         #         "No valid STAC assets found for this tile. "
@@ -284,7 +277,6 @@ class XarraySTACTilerFactory(BaseFactory):
     max_items: int = 4
     resolution_scale: float = 2.0
     resampling: str = "nearest"
-    num_threads: int = 1
     viewport_width: int = 0
     viewport_height: int = 0
     viewport_resampling: str = "linear"
@@ -366,7 +358,6 @@ class XarraySTACTilerFactory(BaseFactory):
                     max_items=self.max_items,
                     resolution_scale=self.resolution_scale,
                     resampling=self.resampling,
-                    num_threads=self.num_threads,
                     viewport_width=self.viewport_width,
                     viewport_height=self.viewport_height,
                     viewport_resampling=self.viewport_resampling,
