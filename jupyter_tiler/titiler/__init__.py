@@ -136,7 +136,6 @@ async def add_stac_array(
     max_items: int = 4,
     resolution_scale: float = 2.0,
     resampling: str = "nearest",
-    num_threads: int = 1,
     viewport_width: int = 0,
     viewport_height: int = 0,
     viewport_resampling: str = "linear",
@@ -158,8 +157,6 @@ async def add_stac_array(
         resolution_scale: Multiplier applied to stackstac output resolution.
             Values greater than ``1`` reduce detail and improve performance.
         resampling: stackstac resampling method, e.g. ``nearest`` or ``bilinear``.
-        num_threads: Number of worker threads for stack computation.
-            Use ``1`` for highest responsiveness under many concurrent requests.
         viewport_width: Optional target viewport width in pixels for post-stack
             downsampling. ``0`` disables viewport resampling.
         viewport_height: Optional target viewport height in pixels for post-stack
@@ -220,7 +217,6 @@ async def add_stac_array(
         max_items=max_items,
         resolution_scale=resolution_scale,
         resampling=resampling,
-        num_threads=num_threads,
         viewport_width=viewport_width,
         viewport_height=viewport_height,
         viewport_resampling=viewport_resampling,

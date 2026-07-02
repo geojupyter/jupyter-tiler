@@ -87,7 +87,6 @@ class TiTilerServer(_FastApiTileServer):
         max_items: int = 4,
         resolution_scale: float = 2.0,
         resampling: str = "nearest",
-        num_threads: int = 1,
         viewport_width: int = 640,
         viewport_height: int = 360,
         viewport_resampling: str = "linear",
@@ -98,8 +97,6 @@ class TiTilerServer(_FastApiTileServer):
             raise ValueError("max_items must be >= 1")
         if resolution_scale <= 0:
             raise ValueError("resolution_scale must be > 0")
-        if num_threads < 1:
-            raise ValueError("num_threads must be >= 1")
         if viewport_width < 0 or viewport_height < 0:
             raise ValueError("viewport_width and viewport_height must be >= 0")
 
@@ -116,7 +113,6 @@ class TiTilerServer(_FastApiTileServer):
             max_items=max_items,
             resolution_scale=resolution_scale,
             resampling=resampling,
-            num_threads=num_threads,
             viewport_width=viewport_width,
             viewport_height=viewport_height,
             viewport_resampling=viewport_resampling,
@@ -164,7 +160,6 @@ class TiTilerServer(_FastApiTileServer):
         max_items: int = 4,
         resolution_scale: float = 2.0,
         resampling: str = "nearest",
-        num_threads: int = 1,
         viewport_width: int = 0,
         viewport_height: int = 0,
         viewport_resampling: str = "linear",
@@ -181,7 +176,6 @@ class TiTilerServer(_FastApiTileServer):
             max_items=max_items,
             resolution_scale=resolution_scale,
             resampling=resampling,
-            num_threads=num_threads,
             viewport_width=viewport_width,
             viewport_height=viewport_height,
             viewport_resampling=viewport_resampling,
