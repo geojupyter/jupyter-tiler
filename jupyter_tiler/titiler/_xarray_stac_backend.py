@@ -1,9 +1,11 @@
 import json
+import os
 from collections.abc import Callable
 from threading import Lock
 from typing import Annotated, Any, Literal, cast
 
 import attr
+import dask
 import numpy as np
 import pystac
 import stackstac
@@ -18,7 +20,6 @@ from morecantile import tms as morecantile_tms
 from pydantic import Field
 from pystac_client import ItemSearch
 from pystac_client.stac_api_io import StacApiIO
-from rasterio.enums import Resampling
 from rio_tiler.errors import NoAssetFoundError
 from rio_tiler.models import ImageData
 from rio_tiler.types import ColorMapType
@@ -47,20 +48,7 @@ retry_config = RetrySettings()
 items_config = ItemsSettings(max_items=8)
 
 ttl_cache = TTLCache(maxsize=cache_config.maxsize, ttl=cache_config.ttl)
-
-
-def _normalize_resampling(value: str | Resampling) -> Resampling:
-    """Normalize a resampling value to a rasterio Resampling enum."""
-    if isinstance(value, Resampling):
-        return value
-
-    try:
-        return Resampling[value]
-    except KeyError as e:
-        valid = ", ".join(Resampling.__members__.keys())
-        raise ValueError(
-            f"Invalid resampling '{value}'. Valid values: {valid}"
-        ) from e
+_DEFAULT_DASK_WORKERS = max(1, min(8, os.cpu_count() or 1))
 
 
 def _slice_to_bounds(
@@ -231,7 +219,7 @@ class XarraySTACAPIBackend(STACAPIBackend):
             epsg=self.tms.crs.to_epsg(),
             bounds=bounds,
             resolution=effective_resolution,
-            resampling=_normalize_resampling(resampling),
+            resampling=resampling,
         )
         xr_stack = _slice_to_bounds(xr_stack, bounds)
         xr_stack = _resample_dataarray_to_viewport(
@@ -357,7 +345,11 @@ class XarraySTACTilerFactory(BaseFactory):
                     viewport_resampling=self.viewport_resampling,
                 )
 
-            image = self.array_to_image(tile[0])
+            with dask.config.set(
+                scheduler="threads",
+                num_workers=_DEFAULT_DASK_WORKERS,
+            ):
+                image = self.array_to_image(tile[0])
 
             content, media_type = self.render_func(
                 image,
