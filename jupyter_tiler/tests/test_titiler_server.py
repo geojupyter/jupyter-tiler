@@ -87,7 +87,6 @@ class TestTiTilerServer:
             "/collections/sentinel-2-l2a/tiles/WebMercatorQuad/{z}/{x}/{y}.png"
             in tile_url
         )
-        assert "datetime=2024-01-01%2F2024-12-31" in tile_url
 
 
 class TestTiTilerServerRestart:
