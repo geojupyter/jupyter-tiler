@@ -53,84 +53,10 @@ async def add_data_array(
     )
 
 
-def transparent_image(width: int = 256, height: int = 256) -> ImageData:
-    arr = np.ma.masked_all((1, height, width), dtype=np.uint8)
-
-    return ImageData(
-        arr,
-        assets=None,
-        crs=None,
-        bounds=None,
-    )
-
-
-def default_array_to_image(xr: DataArray) -> ImageData:
-    """
-    Convert a stackstac xarray.DataArray into rio-tiler ImageData.
-
-    Output:
-        ImageData usable by titiler render functions.
-    """
-    height = xr.sizes.get("y", 256)
-    width = xr.sizes.get("x", 256)
-
-    if "time" in xr.dims and xr.sizes["time"] == 0:
-        return transparent_image(width, height)
-
-    if "band" in xr.dims and xr.sizes["band"] == 0:
-        return transparent_image(width, height)
-
-    data = xr.isel(time=0) if "time" in xr.dims else xr
-    if "band" not in data.dims:
-        data = data.expand_dims(dim="band", axis=0)
-
-    arr = data.data
-
-    if hasattr(arr, "compute"):
-        arr = arr.compute()
-
-    if not np.ma.isMaskedArray(arr):
-        arr = np.ma.masked_invalid(arr)
-
-    if arr.size == 0 or np.ma.count(arr) == 0:
-        return transparent_image(width, height)
-
-    if arr.shape[0] >= 3:
-        arr = arr[:3, :, :]
-    elif arr.shape[0] == 2:
-        arr = np.ma.concatenate((arr, arr[1:2, :, :]), axis=0)
-
-    if arr.dtype != np.uint8:
-        scaled = np.ma.empty_like(arr, dtype=np.float32)
-        for band_idx in range(arr.shape[0]):
-            band = arr[band_idx]
-            if np.ma.count(band) == 0:
-                scaled[band_idx] = np.ma.masked_all(band.shape, dtype=np.float32)
-                continue
-
-            band_values = band.compressed()
-            band_min = float(np.nanpercentile(band_values, 2))
-            band_max = float(np.nanpercentile(band_values, 98))
-            if np.isclose(band_max, band_min):
-                band_max = band_min + 1.0
-
-            scaled_band = (band - band_min) / (band_max - band_min)
-            scaled[band_idx] = np.ma.clip(scaled_band, 0.0, 1.0)
-
-        arr = (scaled * 255).astype(np.uint8)
-
-    return ImageData(
-        arr,
-        assets=None,
-        crs=str(data.rio.crs) if hasattr(data, "rio") else None,
-        bounds=data.rio.bounds() if hasattr(data, "rio") else None,
-    )
-
-
 async def add_stac_array(
     stac_url: str,
     collection_id: str,
-    array_to_image: Callable[[DataArray], ImageData] | None = None,
+    array_to_image: Callable[[DataArray], ImageData],
     *,
     assets: list[str] | None = None,
     max_items: int = 4,
@@ -149,8 +75,8 @@ async def add_stac_array(
 
     Args:
         stac_url: Root STAC API URL.
-        array_to_image: Optional callable converting a stackstac ``DataArray`` to
-            ``ImageData``. If omitted, :func:`default_array_to_image` is used.
+        array_to_image: Callable converting a stackstac ``DataArray`` to
+            ``ImageData``.
         collection_id: STAC collection ID used in the tile URL path.
         assets: Optional STAC asset names passed to stackstac.
         max_items: Max number of STAC items to combine per tile. Lower is faster.
@@ -169,47 +95,35 @@ async def add_stac_array(
         A URL template pointing to the new STAC tile endpoint.
 
     Example:
-        NDWI process function for use with a JupyterGIS-style API:
+        NDWI process function:
 
         .. code-block:: python
 
             import numpy as np
             from rio_tiler.models import ImageData
 
-            def ndwi_process(stack):
-                height = stack.sizes.get("y", 256)
-                width = stack.sizes.get("x", 256)
+            def ndwi_process(data):
+                h = data.sizes.get("y", 256)
+                w = data.sizes.get("x", 256)
 
-                if "time" in stack.dims and stack.sizes["time"] == 0:
-                    return ImageData(np.ma.masked_all((1, height, width), dtype=np.uint8))
+                if "time" in data.dims:
+                    # pick one scene OR use median over time; choose one
+                    data = data.isel(time=0)
+                    # data = data.median(dim="time", skipna=True)
 
-                # stackstac band coordinates can be string labels ("B03", "B08")
-                # or numeric values (1, 2, ...) depending on source metadata.
-                data = stack.isel(time=0) if "time" in stack.dims else stack
-
-                if "band" not in data.dims or data.sizes["band"] < 2:
-                    return ImageData(np.ma.masked_all((1, height, width), dtype=np.uint8))
-
-                try:
-                    green = data.sel(band="B03").data.astype(np.float32)
-                    nir = data.sel(band="B08").data.astype(np.float32)
-                except Exception:
-                    # Fallback for unlabeled/numeric band coords.
-                    # Assumes assets=["B03", "B08"] order.
-                    green = data.isel(band=0).data.astype(np.float32)
-                    nir = data.isel(band=1).data.astype(np.float32)
+                green = data.sel(band="green").data.astype(np.float32)
+                nir = data.sel(band="nir").data.astype(np.float32)
 
                 ndwi = (green - nir) / (green + nir + 1e-6)
-                ndwi = np.ma.masked_invalid(ndwi)
-                ndwi_01 = np.ma.clip((ndwi + 1.0) / 2.0, 0.0, 1.0)
-                return ImageData((ndwi_01[np.newaxis, :, :] * 255).astype(np.uint8))
+                ndwi = np.asarray(ndwi)  # drop masked-array dimensional surprises
+                ndwi = np.nan_to_num(ndwi, nan=-1.0, posinf=1.0, neginf=-1.0)
 
-            # User-facing integration in a map widget:
-            # doc.add_stac_array_layer(stac_url, ndwi_process)
+                ndwi_01 = np.clip((ndwi + 1.0) / 2.0, 0.0, 1.0)
+                pixels = (ndwi_01 * 255).astype(np.uint8)  # 2D
+                return ImageData(pixels[np.newaxis, :, :])  # 3D: 1, y, x
+
+            raster_url = add_stac_array(stac_url, collection_id="sentinel-2-l2a", assets=["green", "nir"], array_to_image=ndwi_process)
     """
-    if array_to_image is None:
-        array_to_image = default_array_to_image
-
     return await _get_server().add_stac_array(
         stac_url=stac_url,
         collection_id=collection_id,

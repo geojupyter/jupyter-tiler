@@ -243,12 +243,6 @@ class XarraySTACAPIBackend(STACAPIBackend):
             method=viewport_resampling,
         )
 
-        # if xr_stack.sizes.get("time", 0) == 0 or xr_stack.sizes.get("band", 0) == 0:
-        #     raise NoAssetFoundError(
-        #         "No valid STAC assets found for this tile. "
-        #         "Check collection_id/assets values and query filters (datetime, etc.)."
-        #     )
-
         asset_used = [self.asset_name(asset) for asset in mosaic_assets]
 
         return xr_stack, asset_used
