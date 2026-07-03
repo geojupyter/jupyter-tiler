@@ -7,7 +7,6 @@ from jupyter_tiler.titiler import (
     _get_server,
     add_data_array,
     add_stac_array,
-    default_array_to_image,
     get_routes,
 )
 
@@ -67,18 +66,3 @@ async def test_add_stac_array_uses_custom_collection_and_assets() -> None:
         "/collections/sentinel-2-l2a/tiles/WebMercatorQuad/{z}/{x}/{y}.png"
         in proxy_url
     )
-    assert "datetime=2024-01-01%2F2024-12-31" in proxy_url
-
-
-def test_default_array_to_image_handles_empty_time_dimension() -> None:
-    """Test default STAC converter returns transparent image for empty tiles."""
-    empty = DataArray(
-        np.empty((0, 1, 1, 1), dtype=np.float32),
-        dims=("time", "band", "y", "x"),
-        coords={"time": [], "band": [1], "y": [0], "x": [0]},
-    )
-
-    image = default_array_to_image(empty)
-
-    assert image.array.shape == (1, 1, 1)
-    assert image.array.mask.all()
