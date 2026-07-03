@@ -75,9 +75,9 @@ async def add_stac_array(
 
     Args:
         stac_url: Root STAC API URL.
+        collection_id: STAC collection ID used in the tile URL path.
         array_to_image: Callable converting a stackstac ``DataArray`` to
             ``ImageData``.
-        collection_id: STAC collection ID used in the tile URL path.
         assets: Optional STAC asset names passed to stackstac.
         max_items: Max number of STAC items to combine per tile. Lower is faster.
         resolution_scale: Multiplier applied to stackstac output resolution.
