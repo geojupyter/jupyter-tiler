@@ -36,6 +36,7 @@ dependencies = [
     "geopandas>=1.0.0",
     "titiler-core>=1.1.1",
     "titiler-xarray>=1.1.1",
+    "titiler-stacapi>=2.0.2",
     "xpublish-tiles>=0.4.2",
     "pystac-client",
     "stackstac"
