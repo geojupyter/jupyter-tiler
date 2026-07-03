@@ -1,6 +1,7 @@
 import json
 import os
 from collections.abc import Callable
+from collections import OrderedDict
 from threading import Lock
 from typing import Annotated, Any, Literal, cast
 
@@ -133,6 +134,7 @@ class XarraySTACAPIBackend(STACAPIBackend):
         sortby: list[dict] | None = None,
         limit: int | None = None,
         max_items: int | None = None,
+        stac_search_kwargs: str = "{}",
     ) -> list[pystac.Item]:
         """Find assets."""
 
@@ -155,6 +157,7 @@ class XarraySTACAPIBackend(STACAPIBackend):
         params = {
             **search_query,
             "intersects": geom.model_dump_json(exclude_none=True),
+            **json.loads(stac_search_kwargs),
         }
         params.pop("bbox", None)
 
@@ -177,6 +180,7 @@ class XarraySTACAPIBackend(STACAPIBackend):
         viewport_width: int = 0,
         viewport_height: int = 0,
         viewport_resampling: str = "linear",
+        stac_search_kwargs: Any = {},
         **kwargs: Any,
     ) -> tuple[xarray.DataArray, list[str]]:
         """Get Tile from multiple assets."""
@@ -186,6 +190,7 @@ class XarraySTACAPIBackend(STACAPIBackend):
                 **(search_options or {}),
                 "limit": max_items,
                 "max_items": max_items,
+                "stac_search_kwargs": json.dumps(OrderedDict(stac_search_kwargs)),
             }
 
             # NOTE: This might raise typing issue because in the original backend `assets_for_tile`
@@ -262,6 +267,7 @@ class XarraySTACTilerFactory(BaseFactory):
     viewport_width: int = 0
     viewport_height: int = 0
     viewport_resampling: str = "linear"
+    stac_search_kwargs: Any = {}
 
     def register_routes(self):
         self.tile()
@@ -343,6 +349,7 @@ class XarraySTACTilerFactory(BaseFactory):
                     viewport_width=self.viewport_width,
                     viewport_height=self.viewport_height,
                     viewport_resampling=self.viewport_resampling,
+                    stac_search_kwargs=self.stac_search_kwargs,
                 )
 
             with dask.config.set(

@@ -106,7 +106,7 @@ class TiTilerServer(_FastApiTileServer):
         viewport_width: int = 640,
         viewport_height: int = 360,
         viewport_resampling: str = "linear",
-        **kwargs: str | int,
+        **kwargs,
     ) -> str:
         """Add a data array to the TiTiler server."""
         if max_items < 1:
@@ -134,15 +134,10 @@ class TiTilerServer(_FastApiTileServer):
             viewport_height=viewport_height,
             viewport_resampling=viewport_resampling,
             array_to_image=array_to_image,
+            stac_search_kwargs=kwargs,
         )
 
-        query = urlencode(kwargs)
-        query_suffix = f"?{query}" if query else ""
-
-        return (
-            f"{self._base_url}/{source_id}/collections/{collection_id}/tiles/WebMercatorQuad/{{z}}/{{x}}/{{y}}.png"
-            f"{query_suffix}"
-        )
+        return f"{self._base_url}/{source_id}/collections/{collection_id}/tiles/WebMercatorQuad/{{z}}/{{x}}/{{y}}.png"
 
     def _add_data_array_route(  # type: ignore[override]
         self,
@@ -180,6 +175,7 @@ class TiTilerServer(_FastApiTileServer):
         viewport_width: int = 0,
         viewport_height: int = 0,
         viewport_resampling: str = "linear",
+        stac_search_kwargs,
     ) -> None:
         if self._app is None:
             raise RuntimeError(f"{_not_initialized_message} {_found_bug_message}")
@@ -198,5 +194,6 @@ class TiTilerServer(_FastApiTileServer):
             viewport_resampling=viewport_resampling,
             array_to_image=array_to_image,
             router_prefix=f"/{source_id}",
+            stac_search_kwargs=stac_search_kwargs,
         )
         self._app.include_router(tiler.router, prefix=f"/{source_id}")
