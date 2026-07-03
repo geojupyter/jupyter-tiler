@@ -11,6 +11,7 @@ from titiler.core.algorithm.base import BaseAlgorithm
 from titiler.core.dependencies import DefaultDependency
 from titiler.core.errors import DEFAULT_STATUS_CODES, add_exception_handlers
 from titiler.core.factory import TilerFactory
+from rasterio.enums import Resampling
 from xarray import DataArray
 
 from jupyter_tiler._base_server import _FastApiTileServer
@@ -20,6 +21,20 @@ from jupyter_tiler.constants._messages import (
 )
 from jupyter_tiler.titiler._query import _build_tile_query_params
 from jupyter_tiler.titiler._xarray_stac_backend import XarraySTACTilerFactory
+
+
+def _normalize_resampling(value: str | Resampling) -> Resampling:
+    """Normalize a resampling value to a rasterio Resampling enum."""
+    if isinstance(value, Resampling):
+        return value
+
+    try:
+        return Resampling[value]
+    except KeyError as e:
+        valid = ", ".join(Resampling.__members__.keys())
+        raise ValueError(
+            f"Invalid resampling '{value}'. Valid values: {valid}"
+        ) from e
 
 
 class TiTilerServer(_FastApiTileServer):
@@ -100,6 +115,7 @@ class TiTilerServer(_FastApiTileServer):
             raise ValueError("resolution_scale must be > 0")
         if viewport_width < 0 or viewport_height < 0:
             raise ValueError("viewport_width and viewport_height must be >= 0")
+        resampling = _normalize_resampling(resampling)
 
         await self.start()
 
