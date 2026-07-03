@@ -149,15 +149,6 @@ class _FastApiTileServer(ABC):
         **kwargs: Any,  # noqa: ANN401
     ) -> None: ...
 
-    @abstractmethod
-    def _add_stac_array_route(
-        self,
-        *,
-        source_id: str,
-        data_array: DataArray,
-        **kwargs: Any,  # noqa: ANN401
-    ) -> None: ...
-
     @property
     def _base_url(self) -> str:
         """The URL to the root path of this tiler server instance."""
