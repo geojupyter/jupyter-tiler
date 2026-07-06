@@ -317,7 +317,9 @@ class XarraySTACTilerFactory(BaseFactory):
             tileMatrixSetId: Annotated[
                 Literal[tuple(self.supported_tms.list())],
                 Path(
-                    description="Identifier selecting one of the TileMatrixSetId supported."
+                    description="""
+                    Identifier selecting one of the TileMatrixSetId supported.
+                    """
                 ),
             ],
             format: Annotated[
