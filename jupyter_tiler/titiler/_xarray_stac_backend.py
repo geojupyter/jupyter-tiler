@@ -269,13 +269,13 @@ class XarraySTACTilerFactory(BaseFactory):
     viewport_resampling: str = "linear"
     stac_search_kwargs: Any = {}
 
-    def register_routes(self):
+    def register_routes(self) -> None:
         self.tile()
 
     ############################################################################
     # /tiles
     ############################################################################
-    def tile(self):
+    def tile(self) -> None:
         """Register /tiles endpoint."""
         @self.router.get(
             "/collections/{collection_id}/tiles/{tileMatrixSetId}/{z}/{x}/{y}",
@@ -297,7 +297,7 @@ class XarraySTACTilerFactory(BaseFactory):
             x: Annotated[
                 int,
                 Path(
-                    description="Column (X) index of the tile on the seleced TileMatrix. It cannot exceed the MatrixHeight-1 for the selected TileMatrix.",
+                    description="Column (X) index of the tile on the selected TileMatrix. It cannot exceed the MatrixHeight-1 for the selected TileMatrix.",
                 ),
             ],
             y: Annotated[
@@ -327,7 +327,7 @@ class XarraySTACTilerFactory(BaseFactory):
             assets_accessor_params=Depends(self.assets_accessor_dependency),
             # colormap=Depends(self.colormap_dependency),
             render_params=Depends(self.render_dependency)
-        ):
+        ) -> Response:
             """Create map tile from a dataset."""
             tms = self.supported_tms.get(tileMatrixSetId)
 
