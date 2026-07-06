@@ -180,7 +180,7 @@ class XarraySTACAPIBackend(STACAPIBackend):
         viewport_width: int = 0,
         viewport_height: int = 0,
         viewport_resampling: str = "linear",
-        stac_search_kwargs: Any = {},
+        stac_search_kwargs: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> tuple[xarray.DataArray, list[str]]:
         """Get Tile from multiple assets."""
@@ -190,7 +190,7 @@ class XarraySTACAPIBackend(STACAPIBackend):
                 **(search_options or {}),
                 "limit": max_items,
                 "max_items": max_items,
-                "stac_search_kwargs": json.dumps(OrderedDict(stac_search_kwargs)),
+                "stac_search_kwargs": json.dumps(OrderedDict(stac_search_kwargs or {})),
             }
 
             # NOTE: This might raise typing issue because in the original backend `assets_for_tile`
@@ -322,11 +322,10 @@ class XarraySTACTilerFactory(BaseFactory):
                 int | None,
                 Query(gt=0, description="Tilesize in pixels."),
             ] = None,
-            search=Depends(self.search_dependency),
-            backend_params=Depends(self.backend_dependency),
-            assets_accessor_params=Depends(self.assets_accessor_dependency),
-            # colormap=Depends(self.colormap_dependency),
-            render_params=Depends(self.render_dependency)
+            search: Search = Depends(self.search_dependency),
+            backend_params: BackendParams = Depends(self.backend_dependency),
+            assets_accessor_params: STACAPIExtensionParams = Depends(self.assets_accessor_dependency),
+            render_params: ImageRenderingParams = Depends(self.render_dependency),
         ) -> Response:
             """Create map tile from a dataset."""
             tms = self.supported_tms.get(tileMatrixSetId)
