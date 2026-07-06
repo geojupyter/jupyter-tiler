@@ -136,6 +136,9 @@ ignore = [
   "INP",     # Forbid implicit namespace packages
   "TD",      # Require standards for TODO comments
   "TRY003",  # Forbid "long" exception messages
+  "PLR0913", # Many args
+  "PLR2004", # Constant numbers
+  "N803",    # Variable names case
 ]
 
 [tool.ruff.lint.per-file-ignores]

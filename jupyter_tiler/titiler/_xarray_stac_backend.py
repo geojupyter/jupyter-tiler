@@ -1,7 +1,7 @@
 import json
 import os
-from collections.abc import Callable
 from collections import OrderedDict
+from collections.abc import Callable
 from threading import Lock
 from typing import Annotated, Any, Literal, cast
 
@@ -68,10 +68,7 @@ def _slice_to_bounds(
     x_values = data_array.coords[x_name].values
     y_values = data_array.coords[y_name].values
 
-    if x_values[0] <= x_values[-1]:
-        x_slice = slice(west, east)
-    else:
-        x_slice = slice(east, west)
+    x_slice = slice(west, east) if x_values[0] <= x_values[-1] else slice(east, west)
 
     if y_values[0] <= y_values[-1]:
         y_slice = slice(south, north)
@@ -117,7 +114,7 @@ class XarraySTACAPIBackend(STACAPIBackend):
         return f"{item.collection_id}/{item.id}"
 
     # NOTE: Custom get_assets method which return `pystac.Item` instead of `dict`
-    @cached(  # type: ignore
+    @cached(
         ttl_cache,
         key=lambda self, geom, **kwargs: hashkey(
             self.api_params["url"],
@@ -181,7 +178,6 @@ class XarraySTACAPIBackend(STACAPIBackend):
         viewport_height: int = 0,
         viewport_resampling: str = "linear",
         stac_search_kwargs: dict[str, Any] | None = None,
-        **kwargs: Any,
     ) -> tuple[xarray.DataArray, list[str]]:
         """Get Tile from multiple assets."""
         timings = []
@@ -193,11 +189,13 @@ class XarraySTACAPIBackend(STACAPIBackend):
                 "stac_search_kwargs": json.dumps(OrderedDict(stac_search_kwargs or {})),
             }
 
-            # NOTE: This might raise typing issue because in the original backend `assets_for_tile`
-            # return a list of dict, but in our custom backend it return a list of `pystac.Item`
+            # NOTE: This might raise typing issue because in the original backend
+            # `assets_for_tile`
+            # return a list of dict, but in our custom backend it return a list
+            # of `pystac.Item`
             mosaic_assets = cast(
-                "list[pystac.Item]",  # type: ignore
-                self.assets_for_tile(x, y, z, **search_options),  # type: ignore
+                "list[pystac.Item]",
+                self.assets_for_tile(x, y, z, **search_options),
             )
         timings.append(("search", round(t.elapsed * 1000, 2)))
 
@@ -267,7 +265,7 @@ class XarraySTACTilerFactory(BaseFactory):
     viewport_width: int = 0
     viewport_height: int = 0
     viewport_resampling: str = "linear"
-    stac_search_kwargs: Any = {}
+    stac_search_kwargs: dict[str, object] | None = None
 
     def register_routes(self) -> None:
         self.tile()
@@ -277,6 +275,7 @@ class XarraySTACTilerFactory(BaseFactory):
     ############################################################################
     def tile(self) -> None:
         """Register /tiles endpoint."""
+
         @self.router.get(
             "/collections/{collection_id}/tiles/{tileMatrixSetId}/{z}/{x}/{y}",
             operation_id=f"{self.operation_prefix}getTile",
@@ -291,19 +290,28 @@ class XarraySTACTilerFactory(BaseFactory):
             z: Annotated[
                 int,
                 Path(
-                    description="Identifier (Z) selecting one of the scales defined in the TileMatrixSet and representing the scaleDenominator the tile.",
+                    description="""
+                    Identifier (Z) selecting one of the scales defined
+                    in the TileMatrixSet and representing the scaleDenominator the tile.
+                    """,
                 ),
             ],
             x: Annotated[
                 int,
                 Path(
-                    description="Column (X) index of the tile on the selected TileMatrix. It cannot exceed the MatrixHeight-1 for the selected TileMatrix.",
+                    description="""
+                    Column (X) index of the tile on the selected TileMatrix.
+                    It cannot exceed the MatrixHeight-1 for the selected TileMatrix.
+                    """,
                 ),
             ],
             y: Annotated[
                 int,
                 Path(
-                    description="Row (Y) index of the tile on the selected TileMatrix. It cannot exceed the MatrixWidth-1 for the selected TileMatrix.",
+                    description="""
+                    Row (Y) index of the tile on the selected TileMatrix.
+                    It cannot exceed the MatrixWidth-1 for the selected TileMatrix.
+                    """,
                 ),
             ],
             tileMatrixSetId: Annotated[
@@ -315,7 +323,10 @@ class XarraySTACTilerFactory(BaseFactory):
             format: Annotated[
                 ImageType | None,
                 Field(
-                    description="Default will be automatically defined if the output image needs a mask (png) or not (jpeg)."
+                    description="""
+                    Default will be automatically defined if the output image
+                    needs a mask (png) or not (jpeg).
+                    """
                 ),
             ] = None,
             tilesize: Annotated[
@@ -324,7 +335,9 @@ class XarraySTACTilerFactory(BaseFactory):
             ] = None,
             search: Search = Depends(self.search_dependency),
             backend_params: BackendParams = Depends(self.backend_dependency),
-            assets_accessor_params: STACAPIExtensionParams = Depends(self.assets_accessor_dependency),
+            assets_accessor_params: STACAPIExtensionParams = Depends(
+                self.assets_accessor_dependency
+            ),
             render_params: ImageRenderingParams = Depends(self.render_dependency),
         ) -> Response:
             """Create map tile from a dataset."""
@@ -348,7 +361,7 @@ class XarraySTACTilerFactory(BaseFactory):
                     viewport_width=self.viewport_width,
                     viewport_height=self.viewport_height,
                     viewport_resampling=self.viewport_resampling,
-                    stac_search_kwargs=self.stac_search_kwargs,
+                    stac_search_kwargs=self.stac_search_kwargs or {},
                 )
 
             with dask.config.set(
@@ -360,7 +373,6 @@ class XarraySTACTilerFactory(BaseFactory):
             content, media_type = self.render_func(
                 image,
                 output_format=format,
-                # colormap=colormap,
                 **render_params.as_dict(),
             )
 
