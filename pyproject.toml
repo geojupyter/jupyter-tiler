@@ -60,6 +60,7 @@ test = [
     "pytest-asyncio",
     "pytest-cov",
     "pytest-jupyter[server]>=0.6.0",
+    "types-cachetools",
 ]
 docs = [
     "myst-parser>=5.0.0",
@@ -119,6 +120,8 @@ module = [
     "rio_tiler.*",
     "titiler.*",
     "xpublish.*",
+    "stackstac",
+    "rasterio.enums",
 ]
 ignore_missing_imports = true
 

@@ -1,6 +1,7 @@
 import uuid
 from collections.abc import Callable
 from urllib.parse import urlencode
+from typing import Any
 
 from fastapi import FastAPI
 from rasterio.enums import Resampling
@@ -103,7 +104,7 @@ class TiTilerServer(_FastApiTileServer):
         viewport_width: int = 640,
         viewport_height: int = 360,
         viewport_resampling: str = "linear",
-        **kwargs,
+        **kwargs: Any,
     ) -> str:
         """Add a data array to the TiTiler server."""
         if max_items < 1:
@@ -160,7 +161,7 @@ class TiTilerServer(_FastApiTileServer):
         )
         self._app.include_router(tiler.router, prefix=f"/{source_id}")
 
-    def _add_stac_array_route(  # type: ignore[override]
+    def _add_stac_array_route(
         self,
         *,
         source_id: str,

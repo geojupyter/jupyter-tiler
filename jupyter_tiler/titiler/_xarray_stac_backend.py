@@ -11,6 +11,7 @@ import numpy as np
 import pystac
 import stackstac
 import xarray
+from xarray.core.types import InterpOptions
 from attrs import define
 from cachetools import TTLCache, cached
 from cachetools.keys import hashkey
@@ -48,7 +49,7 @@ cache_config = CacheSettings()
 retry_config = RetrySettings()
 items_config = ItemsSettings(max_items=8)
 
-ttl_cache = TTLCache(maxsize=cache_config.maxsize, ttl=cache_config.ttl)
+ttl_cache: Any = TTLCache(maxsize=cache_config.maxsize, ttl=cache_config.ttl)
 _DEFAULT_DASK_WORKERS = max(1, min(8, os.cpu_count() or 1))
 
 
@@ -85,7 +86,7 @@ def _resample_dataarray_to_viewport(
     y_name: str,
     viewport_width: int,
     viewport_height: int,
-    method: str = "linear",
+    method: InterpOptions = "linear",
 ) -> xarray.DataArray:
     """Resample a DataArray to an approximate viewport-sized grid."""
     if viewport_width <= 0 or viewport_height <= 0:
@@ -128,7 +129,7 @@ class XarraySTACAPIBackend(STACAPIBackend):
     def get_assets(  # type: ignore[override]
         self,
         geom: Geometry,
-        sortby: list[dict] | None = None,
+        sortby: list[dict[str, Any]] | None = None,
         limit: int | None = None,
         max_items: int | None = None,
         stac_search_kwargs: str = "{}",
@@ -169,14 +170,14 @@ class XarraySTACAPIBackend(STACAPIBackend):
         y: int,
         z: int,
         assets: list[str] | None = None,
-        search_options: dict | None = None,
+        search_options: dict[str, Any] | None = None,
         tilesize: int | None = None,
         max_items: int = 4,
         resolution_scale: float = 2.0,
         resampling: str = "nearest",
         viewport_width: int = 0,
         viewport_height: int = 0,
-        viewport_resampling: str = "linear",
+        viewport_resampling: InterpOptions = "linear",
         stac_search_kwargs: dict[str, Any] | None = None,
     ) -> tuple[xarray.DataArray, list[str]]:
         """Get Tile from multiple assets."""
@@ -315,7 +316,7 @@ class XarraySTACTilerFactory(BaseFactory):
                 ),
             ],
             tileMatrixSetId: Annotated[
-                Literal[tuple(self.supported_tms.list())],
+                Literal["WebMercatorQuad"],
                 Path(
                     description="""
                     Identifier selecting one of the TileMatrixSetId supported.
