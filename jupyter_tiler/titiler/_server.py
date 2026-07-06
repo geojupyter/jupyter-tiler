@@ -174,7 +174,7 @@ class TiTilerServer(_FastApiTileServer):
         viewport_width: int = 0,
         viewport_height: int = 0,
         viewport_resampling: str = "linear",
-        stac_search_kwargs,
+        stac_search_kwargs: dict[str, object],
     ) -> None:
         if self._app is None:
             raise RuntimeError(f"{_not_initialized_message} {_found_bug_message}")

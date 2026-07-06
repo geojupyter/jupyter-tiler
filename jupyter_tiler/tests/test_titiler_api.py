@@ -1,4 +1,3 @@
-import numpy as np
 import pytest
 from rio_tiler.models import ImageData
 from xarray import DataArray

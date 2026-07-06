@@ -2,7 +2,6 @@ from collections.abc import Callable
 from functools import cache
 from typing import Any
 
-import numpy as np
 from rio_tiler.models import ImageData
 from titiler.core.algorithm.base import BaseAlgorithm
 from xarray import DataArray
@@ -69,10 +68,8 @@ async def add_stac_array(
 ) -> str:
     """Add a STAC API source to the TiTiler server.
 
-    The default ``array_to_image`` works for most multi-band and single-band stacks:
-    it computes the first time slice, masks invalid values, applies robust percentile
-    scaling, and returns an ``ImageData`` tile.
-
+    This registers a new tile endpoint backed by a STAC API search and a user-provided
+    ``array_to_image`` callable which converts the stacked ``DataArray`` into ``ImageData``.
     Args:
         stac_url: Root STAC API URL.
         collection_id: STAC collection ID used in the tile URL path.
@@ -89,7 +86,7 @@ async def add_stac_array(
             downsampling. ``0`` disables viewport resampling.
         viewport_resampling: Interpolation method for viewport downsampling.
             Typical values are ``linear`` or ``nearest``.
-        kwargs: Extra query parameters appended to the tile URL.
+        kwargs: Extra STAC API search parameters applied to every tile request.
 
     Returns:
         A URL template pointing to the new STAC tile endpoint.
@@ -122,7 +119,7 @@ async def add_stac_array(
                 pixels = (ndwi_01 * 255).astype(np.uint8)  # 2D
                 return ImageData(pixels[np.newaxis, :, :])  # 3D: 1, y, x
 
-            raster_url = add_stac_array(stac_url, collection_id="sentinel-2-l2a", assets=["green", "nir"], array_to_image=ndwi_process)
+            raster_url = await add_stac_array(stac_url, collection_id="sentinel-2-l2a", assets=["green", "nir"], array_to_image=ndwi_process)
     """
     return await _get_server().add_stac_array(
         stac_url=stac_url,
