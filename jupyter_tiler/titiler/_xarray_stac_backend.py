@@ -11,7 +11,6 @@ import numpy as np
 import pystac
 import stackstac
 import xarray
-from xarray.core.types import InterpOptions
 from attrs import define
 from cachetools import TTLCache, cached
 from cachetools.keys import hashkey
@@ -44,6 +43,7 @@ from titiler.stacapi.dependencies import (
 )
 from titiler.stacapi.settings import CacheSettings, ItemsSettings, RetrySettings
 from urllib3 import Retry
+from xarray.core.types import InterpOptions
 
 cache_config = CacheSettings()
 retry_config = RetrySettings()

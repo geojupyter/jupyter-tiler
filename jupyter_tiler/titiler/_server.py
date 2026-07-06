@@ -1,7 +1,7 @@
 import uuid
 from collections.abc import Callable
-from urllib.parse import urlencode
 from typing import Any
+from urllib.parse import urlencode
 
 from fastapi import FastAPI
 from rasterio.enums import Resampling
