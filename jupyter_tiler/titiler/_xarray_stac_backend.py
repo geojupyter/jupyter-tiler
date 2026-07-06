@@ -124,7 +124,7 @@ class XarraySTACAPIBackend(STACAPIBackend):
             str(geom),
             json.dumps(self.input),
             json.dumps(self.api_params.get("headers", {})),
-            **kwargs,
+            json.dumps(kwargs, sort_keys=True, default=str),
         ),
         lock=Lock(),
     )
@@ -156,7 +156,7 @@ class XarraySTACAPIBackend(STACAPIBackend):
 
         params = {
             **search_query,
-            "intersects": geom.model_dump_json(exclude_none=True),
+            "intersects": geom.model_dump(exclude_none=True),
             **json.loads(stac_search_kwargs),
         }
         params.pop("bbox", None)
