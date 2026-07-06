@@ -144,6 +144,7 @@ ignore = [
   "N803",    # Variable names case
   "A002",    # Shadowing
   "B008",    # Depends position
+  "ANN401",  # kwargs as Any
 ]
 
 [tool.ruff.lint.per-file-ignores]

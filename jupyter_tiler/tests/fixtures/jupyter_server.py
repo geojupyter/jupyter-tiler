@@ -4,7 +4,7 @@ import pytest
 
 
 @pytest.fixture
-def jp_server_config(jp_server_config: Any) -> dict[str, Any]:  # noqa: ANN401
+def jp_server_config(jp_server_config: Any) -> dict[str, Any]:
     return {
         "ServerApp": {
             "jpserver_extensions": {
