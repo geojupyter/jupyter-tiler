@@ -48,7 +48,9 @@ async def test_add_data_array_works(
 @pytest.mark.usefixtures("clean_titiler_api")
 @pytest.mark.asyncio
 async def test_add_stac_array_uses_custom_collection_and_assets() -> None:
-    """Test add_stac_array returns a URL with custom collection path and query params."""
+    """Test add_stac_array returns a URL with custom
+    collection path and query params.
+    """
 
     def ndwi_process(_array: DataArray) -> ImageData:
         raise NotImplementedError
@@ -62,6 +64,5 @@ async def test_add_stac_array_uses_custom_collection_and_assets() -> None:
     )
 
     assert (
-        "/collections/sentinel-2-l2a/tiles/WebMercatorQuad/{z}/{x}/{y}.png"
-        in proxy_url
+        "/collections/sentinel-2-l2a/tiles/WebMercatorQuad/{z}/{x}/{y}.png" in proxy_url
     )

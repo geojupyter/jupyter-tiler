@@ -69,7 +69,8 @@ async def add_stac_array(
     """Add a STAC API source to the TiTiler server.
 
     This registers a new tile endpoint backed by a STAC API search and a user-provided
-    ``array_to_image`` callable which converts the stacked ``DataArray`` into ``ImageData``.
+    ``array_to_image`` callable which converts the stacked ``DataArray``
+    into ``ImageData``.
     Args:
         stac_url: Root STAC API URL.
         collection_id: STAC collection ID used in the tile URL path.
@@ -119,7 +120,12 @@ async def add_stac_array(
                 pixels = (ndwi_01 * 255).astype(np.uint8)  # 2D
                 return ImageData(pixels[np.newaxis, :, :])  # 3D: 1, y, x
 
-            raster_url = await add_stac_array(stac_url, collection_id="sentinel-2-l2a", assets=["green", "nir"], array_to_image=ndwi_process)
+            raster_url = await add_stac_array(
+                stac_url,
+                collection_id="sentinel-2-l2a",
+                assets=["green", "nir"],
+                array_to_image=ndwi_process
+            )
     """
     return await _get_server().add_stac_array(
         stac_url=stac_url,

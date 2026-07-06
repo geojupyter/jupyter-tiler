@@ -3,6 +3,7 @@ from collections.abc import Callable
 from urllib.parse import urlencode
 
 from fastapi import FastAPI
+from rasterio.enums import Resampling
 from rio_tiler.io.xarray import XarrayReader
 from rio_tiler.models import ImageData
 from titiler.core.algorithm import algorithms as default_algorithms
@@ -10,7 +11,6 @@ from titiler.core.algorithm.base import BaseAlgorithm
 from titiler.core.dependencies import DefaultDependency
 from titiler.core.errors import DEFAULT_STATUS_CODES, add_exception_handlers
 from titiler.core.factory import TilerFactory
-from rasterio.enums import Resampling
 from xarray import DataArray
 
 from jupyter_tiler._base_server import _FastApiTileServer
@@ -30,9 +30,7 @@ def _normalize_resampling(value: str | Resampling) -> Resampling:
         return Resampling[value]
     except KeyError as e:
         valid = ", ".join(Resampling.__members__.keys())
-        raise ValueError(
-            f"Invalid resampling '{value}'. Valid values: {valid}"
-        ) from e
+        raise ValueError(f"Invalid resampling '{value}'. Valid values: {valid}") from e
 
 
 class TiTilerServer(_FastApiTileServer):
@@ -136,7 +134,8 @@ class TiTilerServer(_FastApiTileServer):
             stac_search_kwargs=kwargs,
         )
 
-        return f"{self._base_url}/{source_id}/collections/{collection_id}/tiles/WebMercatorQuad/{{z}}/{{x}}/{{y}}.png"
+        prefix = f"{self._base_url}/{source_id}/collections/{collection_id}"
+        return f"{prefix}/tiles/WebMercatorQuad/{{z}}/{{x}}/{{y}}.png"
 
     def _add_data_array_route(  # type: ignore[override]
         self,

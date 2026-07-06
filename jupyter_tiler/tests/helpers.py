@@ -13,7 +13,7 @@ async def check_tile(*, proxy_url: str, transparent_ok: bool = False) -> None:
     async with httpx.AsyncClient() as client:
         resp = await client.get(url)
 
-    if resp.status_code != 200:  # noqa: PLR2004
+    if resp.status_code != 200:
         raise TileRequestFailedError(
             status=resp.status_code,
             text=resp.text,
