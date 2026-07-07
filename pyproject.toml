@@ -78,6 +78,7 @@ play = [
     "gcsfs",
     "jupyterlab_execute_time",
     "leafmap",
+    "ipyleaflet",
     "mapclassify",
     "odc-stac",
     "pystac-client",
