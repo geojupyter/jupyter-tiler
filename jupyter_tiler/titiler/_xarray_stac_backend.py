@@ -2,6 +2,7 @@ import json
 import os
 from collections import OrderedDict
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from threading import Lock
 from typing import Annotated, Any, Literal, cast
 
@@ -36,7 +37,7 @@ from titiler.core.resources.enums import ImageType
 from titiler.core.utils import render_image
 from titiler.stacapi.backend import STACAPIBackend
 from titiler.stacapi.dependencies import (
-    BackendParams,
+    APIParams,
     CollectionSearch,
     Search,
     STACAPIExtensionParams,
@@ -103,6 +104,24 @@ def _resample_dataarray_to_viewport(
     x_target = np.linspace(float(x_values[0]), float(x_values[-1]), viewport_width)
     y_target = np.linspace(float(y_values[0]), float(y_values[-1]), viewport_height)
     return data_array.interp({x_name: x_target, y_name: y_target}, method=method)
+
+
+@dataclass(init=False)
+class BackendParams(DefaultDependency):
+    """backend parameters."""
+
+    api_params: APIParams = field(init=False)
+
+    def __init__(
+        self,
+        url: str,
+    ):
+        """Initialize BackendParams
+
+        The STAC API URL is provided by the tiler factory configuration rather
+        than app state or request query params.
+        """
+        self.api_params = APIParams(url=url)
 
 
 @attr.s
@@ -337,7 +356,9 @@ class XarraySTACTilerFactory(BaseFactory):
                 Query(gt=0, description="Tilesize in pixels."),
             ] = None,
             search: Search = Depends(self.search_dependency),
-            backend_params: BackendParams = Depends(self.backend_dependency),
+            backend_params: BackendParams = Depends(
+                lambda: BackendParams(url=self.stac_url)
+            ),
             assets_accessor_params: STACAPIExtensionParams = Depends(
                 self.assets_accessor_dependency
             ),
