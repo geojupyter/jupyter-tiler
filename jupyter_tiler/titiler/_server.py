@@ -179,9 +179,6 @@ class TiTilerServer(_FastApiTileServer):
         if self._app is None:
             raise RuntimeError(f"{_not_initialized_message} {_found_bug_message}")
 
-        # titiler.stacapi dependencies read the STAC API URL from app.state.stac_url.
-        self._app.state.stac_url = stac_url
-
         tiler = XarraySTACTilerFactory(
             stac_url=stac_url,
             assets=assets,
