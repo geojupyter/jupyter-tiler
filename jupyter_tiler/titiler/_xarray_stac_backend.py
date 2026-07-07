@@ -115,7 +115,7 @@ class BackendParams(DefaultDependency):
     def __init__(
         self,
         url: str,
-    ):
+    ) -> None:
         """Initialize BackendParams
 
         The STAC API URL is provided by the tiler factory configuration rather
