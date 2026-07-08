@@ -192,7 +192,7 @@ class XarraySTACAPIBackend(STACAPIBackend):
         search_options: dict[str, Any] | None = None,
         tilesize: int | None = None,
         max_items: int = 4,
-        resolution_scale: float = 2.0,
+        resolution_scale: float = 1.0,
         resampling: str = "nearest",
         viewport_width: int = 0,
         viewport_height: int = 0,
@@ -280,7 +280,7 @@ class XarraySTACTilerFactory(BaseFactory):
 
     assets: list[str] | None = None
     max_items: int = 4
-    resolution_scale: float = 2.0
+    resolution_scale: float = 1.0
     resampling: str = "nearest"
     viewport_width: int = 0
     viewport_height: int = 0
