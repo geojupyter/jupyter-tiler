@@ -36,7 +36,10 @@ dependencies = [
     "geopandas>=1.0.0",
     "titiler-core>=1.1.1",
     "titiler-xarray>=1.1.1",
+    "titiler-stacapi>=2.0.2",
     "xpublish-tiles>=0.4.2",
+    "pystac-client",
+    "stackstac"
 ]
 
 [project.urls]
@@ -57,6 +60,7 @@ test = [
     "pytest-asyncio",
     "pytest-cov",
     "pytest-jupyter[server]>=0.6.0",
+    "types-cachetools",
 ]
 docs = [
     "myst-parser>=5.0.0",
@@ -74,6 +78,7 @@ play = [
     "gcsfs",
     "jupyterlab_execute_time",
     "leafmap",
+    "ipyleaflet",
     "mapclassify",
     "odc-stac",
     "pystac-client",
@@ -116,6 +121,8 @@ module = [
     "rio_tiler.*",
     "titiler.*",
     "xpublish.*",
+    "stackstac",
+    "rasterio.enums",
 ]
 ignore_missing_imports = true
 
@@ -133,6 +140,12 @@ ignore = [
   "INP",     # Forbid implicit namespace packages
   "TD",      # Require standards for TODO comments
   "TRY003",  # Forbid "long" exception messages
+  "PLR0913", # Many args
+  "PLR2004", # Constant numbers
+  "N803",    # Variable names case
+  "A002",    # Shadowing
+  "B008",    # Depends position
+  "ANN401",  # kwargs as Any
 ]
 
 [tool.ruff.lint.per-file-ignores]

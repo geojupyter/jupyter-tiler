@@ -1,6 +1,8 @@
+from collections.abc import Callable
 from functools import cache
 from typing import Any
 
+from rio_tiler.models import ImageData
 from titiler.core.algorithm.base import BaseAlgorithm
 from xarray import DataArray
 
@@ -46,6 +48,96 @@ async def add_data_array(
         colormap_range=colormap_range,
         tile_dim_scale=tile_dim_scale,
         algorithm=algorithm,
+        **kwargs,
+    )
+
+
+async def add_stac_array(
+    stac_url: str,
+    collection_id: str,
+    array_to_image: Callable[[DataArray], ImageData],
+    *,
+    assets: list[str] | None = None,
+    max_items: int = 4,
+    resolution_scale: float = 1.0,
+    resampling: str = "nearest",
+    viewport_width: int = 0,
+    viewport_height: int = 0,
+    viewport_resampling: str = "linear",
+    **kwargs: str | int,
+) -> str:
+    """Add a STAC API source to the TiTiler server.
+
+    This registers a new tile endpoint backed by a STAC API search and a user-provided
+    ``array_to_image`` callable which converts the stacked ``DataArray``
+    into ``ImageData``.
+
+    Args:
+        stac_url: Root STAC API URL.
+        collection_id: STAC collection ID used in the tile URL path.
+        array_to_image: Callable converting a stackstac ``DataArray`` to ``ImageData``.
+        assets: Optional STAC asset names passed to stackstac.
+        max_items: Max number of STAC items to combine per tile. Lower is faster.
+        resolution_scale: Multiplier applied to stackstac output resolution.
+            Values greater than ``1`` reduce detail and improve performance.
+        resampling: stackstac resampling method, e.g. ``nearest`` or ``bilinear``.
+        viewport_width: Optional target viewport width in pixels for post-stack
+            downsampling. ``0`` disables viewport resampling.
+        viewport_height: Optional target viewport height in pixels for post-stack
+            downsampling. ``0`` disables viewport resampling.
+        viewport_resampling: Interpolation method for viewport downsampling.
+            Typical values are ``linear`` or ``nearest``.
+        kwargs: Extra STAC API search parameters applied to every tile request.
+
+    Returns:
+        A URL template pointing to the new STAC tile endpoint.
+
+    Example:
+        NDWI process function:
+
+        .. code-block:: python
+
+            import numpy as np
+            from rio_tiler.models import ImageData
+
+            def ndwi_process(data):
+                h = data.sizes.get("y", 256)
+                w = data.sizes.get("x", 256)
+
+                if "time" in data.dims:
+                    # pick one scene OR use median over time; choose one
+                    data = data.isel(time=0)
+                    # data = data.median(dim="time", skipna=True)
+
+                green = data.sel(band="green").data.astype(np.float32)
+                nir = data.sel(band="nir").data.astype(np.float32)
+
+                ndwi = (green - nir) / (green + nir + 1e-6)
+                ndwi = np.asarray(ndwi)  # drop masked-array dimensional surprises
+                ndwi = np.nan_to_num(ndwi, nan=-1.0, posinf=1.0, neginf=-1.0)
+
+                ndwi_01 = np.clip((ndwi + 1.0) / 2.0, 0.0, 1.0)
+                pixels = (ndwi_01 * 255).astype(np.uint8)  # 2D
+                return ImageData(pixels[np.newaxis, :, :])  # 3D: 1, y, x
+
+            raster_url = await add_stac_array(
+                stac_url,
+                collection_id="sentinel-2-l2a",
+                assets=["green", "nir"],
+                array_to_image=ndwi_process
+            )
+    """
+    return await _get_server().add_stac_array(
+        stac_url=stac_url,
+        collection_id=collection_id,
+        assets=assets,
+        max_items=max_items,
+        resolution_scale=resolution_scale,
+        resampling=resampling,
+        viewport_width=viewport_width,
+        viewport_height=viewport_height,
+        viewport_resampling=viewport_resampling,
+        array_to_image=array_to_image,
         **kwargs,
     )
 
