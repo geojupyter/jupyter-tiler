@@ -176,8 +176,11 @@ class TestBuildTileQueryParams:
         colormap: ColorMapType,
     ) -> None:
         params = self._build(colormap=colormap)
+        encoded_colormap = params["colormap"]
+
         assert "colormap_name" not in params
-        assert json.loads(params["colormap"]) == json.loads(json.dumps(colormap))
+        assert isinstance(encoded_colormap, str)
+        assert json.loads(encoded_colormap) == json.loads(json.dumps(colormap))
 
     def test_colormap_and_colormap_name_are_mutually_exclusive(self) -> None:
         with pytest.raises(RuntimeError, match="mutually exclusive"):
