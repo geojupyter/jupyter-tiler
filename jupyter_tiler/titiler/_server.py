@@ -1,8 +1,10 @@
+import json
 import uuid
 from urllib.parse import urlencode
 
 from fastapi import FastAPI
 from rio_tiler.io.xarray import XarrayReader
+from rio_tiler.types import ColorMapType
 from titiler.core.algorithm import algorithms as default_algorithms
 from titiler.core.algorithm.base import BaseAlgorithm
 from titiler.core.dependencies import DefaultDependency
@@ -34,11 +36,12 @@ class TiTilerServer(_FastApiTileServer):
         add_exception_handlers(app, DEFAULT_STATUS_CODES)
         return app
 
-    async def add_data_array(
+    async def add_data_array(  # noqa: PLR0913
         self,
         data_array: DataArray,
         *,
-        colormap_name: str = "viridis",
+        colormap_name: str | None = None,
+        colormap: ColorMapType | None = None,
         colormap_range: tuple[float, float] | None = None,
         tile_dim_scale: int = 1,
         algorithm: BaseAlgorithm | None = None,
@@ -59,12 +62,21 @@ class TiTilerServer(_FastApiTileServer):
 
         _params = {
             "scale": str(tile_dim_scale),
-            "colormap_name": colormap_name,
             "reproject": "max",
             **kwargs,
         }
+
+        if colormap is not None and colormap_name is not None:
+            raise RuntimeError("colormap and colormap_name are mutually exclusive.")
+
+        if colormap is not None:
+            _params["colormap"] = json.dumps(colormap)
+        else:
+            _params["colormap_name"] = colormap_name or "viridis"
+
         if colormap_range is not None:
             _params["rescale"] = f"{colormap_range[0]},{colormap_range[1]}"
+
         if algorithm is not None:
             _params["algorithm"] = "algorithm"
 

@@ -1,6 +1,7 @@
 from functools import cache
 from typing import Any
 
+from rio_tiler.types import ColorMapType
 from titiler.core.algorithm.base import BaseAlgorithm
 from xarray import DataArray
 
@@ -12,10 +13,11 @@ def _get_server() -> TiTilerServer:
     return TiTilerServer()
 
 
-async def add_data_array(
+async def add_data_array(  # noqa: PLR0913
     data_array: DataArray,
     *,
-    colormap_name: str = "viridis",
+    colormap_name: str | None = None,
+    colormap: ColorMapType | None = None,
     colormap_range: tuple[float, float] | None = None,
     tile_dim_scale: int = 1,
     algorithm: BaseAlgorithm | None = None,
@@ -30,6 +32,17 @@ async def add_data_array(
         colormap_name: A ``rio-tiler``-supported colormap name.
             See the `rio-tiler docs <https://cogeotiff.github.io/rio-tiler/latest/api/rio_tiler/colormap/#rio_tiler.colormap.ColorMaps.list>`_
             for details.
+            Defaults to "viridis".
+            Mutually exclusive with ``colormap``.
+        colormap: A custom colormap to apply to the dataset.
+            One of:
+
+            * A dict of ``{0..255: (r, g, b, a)}`` for a continuous colormap.
+            * A sparse dict of ``{exact_value: (r, g, b, a)}`` for a discrete colormap.
+            * A list of ``[((min, max), (r, g, b, a)), ((min2, max2), (r, g, b, a))]``
+              for an interval colormap.
+
+            Mutually exclusive with ``colormap_name``.
         colormap_range: The range of data values ``(min, max)`` to be colormapped
         tile_dim_scale: Tile size scale. Default ``1`` corresponds to 256*256px tiles.
         algorithm: A TiTiler algorithm class.
@@ -43,6 +56,7 @@ async def add_data_array(
     return await _get_server().add_data_array(
         data_array,
         colormap_name=colormap_name,
+        colormap=colormap,
         colormap_range=colormap_range,
         tile_dim_scale=tile_dim_scale,
         algorithm=algorithm,
