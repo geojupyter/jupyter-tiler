@@ -41,3 +41,35 @@ def mock_data_array(request: pytest.FixtureRequest) -> xra.DataArray:
     )
     da.rio.write_crs("EPSG:4326", inplace=True)
     return da
+
+
+@pytest.fixture
+def mock_categorical_data_array() -> xra.DataArray:
+    """Mock data with categorical integer values (0, 1, 2).
+
+    Mostly useful for testing with custom discrete colormaps."""
+    npixels_y = 100
+    npixels_x = 100
+    min_x = -180
+    max_x = 180
+    min_y = -90
+    max_y = 90
+
+    x_res = (max_x - min_x) / npixels_x
+    y_res = (max_y - min_y) / npixels_y
+
+    y_coords = np.linspace(max_y - y_res / 2, min_y + y_res / 2, npixels_y)
+    x_coords = np.linspace(min_x + x_res / 2, max_x - x_res / 2, npixels_x)
+
+    # Three horizontal bands: 0 (north), 1 (middle), 2 (south).
+    data = np.zeros((npixels_y, npixels_x), dtype="uint8")
+    data[npixels_y // 3 : 2 * npixels_y // 3] = 1
+    data[2 * npixels_y // 3 :] = 2
+
+    da = xra.DataArray(
+        data,
+        dims=["latitude", "longitude"],
+        coords={"latitude": y_coords, "longitude": x_coords},
+    )
+    da.rio.write_crs("EPSG:4326", inplace=True)
+    return da
