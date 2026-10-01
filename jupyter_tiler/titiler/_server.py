@@ -1,8 +1,10 @@
+import json
 import uuid
 from urllib.parse import urlencode
 
 from fastapi import FastAPI
 from rio_tiler.io.xarray import XarrayReader
+from rio_tiler.types import ColorMapType
 from titiler.core.algorithm import algorithms as default_algorithms
 from titiler.core.algorithm.base import BaseAlgorithm
 from titiler.core.dependencies import DefaultDependency
@@ -15,6 +17,39 @@ from jupyter_tiler.constants._messages import (
     _found_bug_message,
     _not_initialized_message,
 )
+
+
+def _build_tile_query_params(  # noqa: PLR0913
+    *,
+    colormap_name: str | None,
+    colormap: ColorMapType | None,
+    colormap_range: tuple[float, float] | None,
+    tile_dim_scale: int,
+    has_algorithm: bool,
+    extra_params: dict[str, str | int],
+) -> dict[str, str | int]:
+    """Build the query params for a TiTiler tile-endpoint URL."""
+    if colormap is not None and colormap_name is not None:
+        raise RuntimeError("colormap and colormap_name are mutually exclusive.")
+
+    params: dict[str, str | int] = {
+        "scale": str(tile_dim_scale),
+        "reproject": "max",
+        **extra_params,
+    }
+
+    if colormap is not None:
+        params["colormap"] = json.dumps(colormap)
+    else:
+        params["colormap_name"] = colormap_name or "viridis"
+
+    if colormap_range is not None:
+        params["rescale"] = f"{colormap_range[0]},{colormap_range[1]}"
+
+    if has_algorithm:
+        params["algorithm"] = "algorithm"
+
+    return params
 
 
 class TiTilerServer(_FastApiTileServer):
@@ -34,17 +69,27 @@ class TiTilerServer(_FastApiTileServer):
         add_exception_handlers(app, DEFAULT_STATUS_CODES)
         return app
 
-    async def add_data_array(
+    async def add_data_array(  # noqa: PLR0913
         self,
         data_array: DataArray,
         *,
-        colormap_name: str = "viridis",
+        colormap_name: str | None = None,
+        colormap: ColorMapType | None = None,
         colormap_range: tuple[float, float] | None = None,
         tile_dim_scale: int = 1,
         algorithm: BaseAlgorithm | None = None,
         **kwargs: str | int,
     ) -> str:
         """Add a data array to the TiTiler server."""
+        params = _build_tile_query_params(
+            colormap_name=colormap_name,
+            colormap=colormap,
+            colormap_range=colormap_range,
+            tile_dim_scale=tile_dim_scale,
+            has_algorithm=algorithm is not None,
+            extra_params=kwargs,
+        )
+
         await self.start()
 
         if self._port is None:
@@ -57,21 +102,10 @@ class TiTilerServer(_FastApiTileServer):
             algorithm=algorithm,
         )
 
-        _params = {
-            "scale": str(tile_dim_scale),
-            "colormap_name": colormap_name,
-            "reproject": "max",
-            **kwargs,
-        }
-        if colormap_range is not None:
-            _params["rescale"] = f"{colormap_range[0]},{colormap_range[1]}"
-        if algorithm is not None:
-            _params["algorithm"] = "algorithm"
-
         return (
             f"{self._base_url}/{source_id}/tiles/WebMercatorQuad"
             "/{z}/{x}/{y}.png"
-            f"?{urlencode(_params)}"
+            f"?{urlencode(params)}"
         )
 
     def _add_data_array_route(  # type: ignore[override]
