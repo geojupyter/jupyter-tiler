@@ -103,6 +103,42 @@ def _filter_items_by_nodata(
     return data_array.isel(time=np.flatnonzero(keep)), keep
 
 
+def _nodata_alpha_mask(
+    data_array: xarray.DataArray,
+    *,
+    x_name: str = "x",
+    y_name: str = "y",
+) -> np.ndarray:
+    """Build a uint8 alpha mask (255 = valid, 0 = nodata) from a DataArray.
+
+    A pixel is nodata when all values across the non-spatial dimensions
+    (e.g. ``time`` and ``band``) are null.
+    """
+    reduce_dims = [dim for dim in data_array.dims if dim not in (x_name, y_name)]
+    valid = ~data_array.isnull().all(dim=reduce_dims)
+    return (valid.compute().values.astype("uint8")) * 255
+
+
+def _apply_nodata_transparency(
+    image: ImageData,
+    data_array: xarray.DataArray,
+) -> ImageData:
+    """Render pixels that are nodata in the source DataArray as transparent.
+
+    The mask is combined with any alpha mask already set by ``array_to_image``:
+    a pixel stays transparent if either mask marks it as nodata. If the image
+    grid does not match the DataArray grid (e.g. ``array_to_image`` regridded),
+    the image is returned unchanged.
+    """
+    alpha = _nodata_alpha_mask(data_array)
+    if alpha.shape != (image.height, image.width):
+        return image
+    if image.alpha_mask is not None:
+        alpha = np.minimum(image.alpha_mask, alpha)
+    image.alpha_mask = alpha
+    return image
+
+
 def _resample_dataarray_to_viewport(  # noqa: PLR0913
     data_array: xarray.DataArray,
     *,
@@ -342,6 +378,9 @@ class XarraySTACTilerFactory(BaseFactory):
     # If set, STAC items whose nodata fraction within a tile exceeds this
     # ratio are dropped before rendering. None disables the filtering.
     max_nodata_ratio: float | None = None
+    # If True (default), pixels that are nodata in the stacked DataArray are
+    # rendered transparent (alpha 0) in the tile image.
+    nodata_transparent: bool = True
 
     def register_routes(self) -> None:
         self.tile()
@@ -450,6 +489,8 @@ class XarraySTACTilerFactory(BaseFactory):
                 num_workers=_DEFAULT_DASK_WORKERS,
             ):
                 image = self.array_to_image(tile[0])
+                if self.nodata_transparent:
+                    image = _apply_nodata_transparency(image, tile[0])
 
             content, media_type = self.render_func(
                 image,

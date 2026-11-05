@@ -128,6 +128,7 @@ class TiTilerServer(_FastApiTileServer):
         viewport_resampling: InterpOptions = "linear",
         stac_search_kwargs: dict[str, Any] | None = None,
         max_nodata_ratio: float | None = None,
+        nodata_transparent: bool = True,
     ) -> str:
         """Add a STAC API source to the TiTiler server."""
         if max_items < 1:
@@ -159,6 +160,7 @@ class TiTilerServer(_FastApiTileServer):
             array_to_image=array_to_image,
             stac_search_kwargs=stac_search_kwargs,
             max_nodata_ratio=max_nodata_ratio,
+            nodata_transparent=nodata_transparent,
         )
 
         prefix = f"{self._base_url}/{source_id}/collections/{collection_id}"
@@ -202,6 +204,7 @@ class TiTilerServer(_FastApiTileServer):
         viewport_resampling: InterpOptions = "linear",
         stac_search_kwargs: dict[str, Any] | None = None,
         max_nodata_ratio: float | None = None,
+        nodata_transparent: bool = True,
     ) -> None:
         if self._app is None:
             raise RuntimeError(f"{_not_initialized_message} {_found_bug_message}")
@@ -219,5 +222,6 @@ class TiTilerServer(_FastApiTileServer):
             router_prefix=f"/{source_id}",
             stac_search_kwargs=stac_search_kwargs,
             max_nodata_ratio=max_nodata_ratio,
+            nodata_transparent=nodata_transparent,
         )
         self._app.include_router(tiler.router, prefix=f"/{source_id}")

@@ -1,11 +1,20 @@
+import io
+
 import numpy as np
 import pytest
 import xarray as xr
+from PIL import Image
 from rio_tiler.models import ImageData
+from titiler.core.resources.enums import ImageType
+from titiler.core.utils import render_image
 from xarray import DataArray
 
 from jupyter_tiler.titiler._server import TiTilerServer
-from jupyter_tiler.titiler._xarray_stac_backend import _filter_items_by_nodata
+from jupyter_tiler.titiler._xarray_stac_backend import (
+    _apply_nodata_transparency,
+    _filter_items_by_nodata,
+    _nodata_alpha_mask,
+)
 
 
 def _stack_with_nodata(nodata_fractions: list[float]) -> xr.DataArray:
@@ -83,3 +92,76 @@ async def test_add_stac_array_rejects_invalid_max_nodata_ratio(
             collection_id="sentinel-2-l2a",
             max_nodata_ratio=bad_ratio,
         )
+
+
+def _stack_with_nodata_pixels() -> xr.DataArray:
+    """Two items x two bands; item-1 is fully nodata."""
+    data = np.ones((2, 2, 4, 4), dtype="float64")
+    data[1, :, :, :] = np.nan
+    return xr.DataArray(
+        data,
+        dims=["time", "band", "y", "x"],
+        coords={"time": ["item-0", "item-1"]},
+    )
+
+
+def test_nodata_alpha_mask_marks_all_nodata_pixels() -> None:
+    stack = _stack_with_nodata_pixels()  # item-1 is fully nodata
+    stack[0, 0, 0, 0] = np.nan  # one band of item-0 nodata at (0, 0)
+    stack[0, :, 2, 3] = np.nan  # all bands of item-0 nodata at (2, 3)
+
+    alpha = _nodata_alpha_mask(stack)
+
+    # a pixel is nodata only if every time slice and band is null there
+    expected = np.full((4, 4), 255, dtype="uint8")
+    expected[2, 3] = 0
+    np.testing.assert_array_equal(alpha, expected)
+
+
+def test_apply_nodata_transparency_sets_alpha_mask() -> None:
+    stack = _stack_with_nodata_pixels()
+    image = ImageData(np.zeros((1, 4, 4), dtype="uint8"))
+
+    result = _apply_nodata_transparency(image, stack)
+
+    assert result.alpha_mask is not None
+    np.testing.assert_array_equal(
+        result.alpha_mask, np.full((4, 4), 255, dtype="uint8")
+    )
+
+
+def test_apply_nodata_transparency_combines_with_existing_alpha() -> None:
+    stack = _stack_with_nodata_pixels()
+    existing = np.full((4, 4), 255, dtype="uint8")
+    existing[2, 2] = 0  # array_to_image already masked this pixel
+    image = ImageData(np.zeros((1, 4, 4), dtype="uint8"), alpha_mask=existing)
+
+    result = _apply_nodata_transparency(image, stack)
+
+    assert result.alpha_mask is not None
+    assert result.alpha_mask[2, 2] == 0
+    assert result.alpha_mask[0, 0] == 255
+
+
+def test_apply_nodata_transparency_skips_on_grid_mismatch() -> None:
+    stack = _stack_with_nodata_pixels()
+    image = ImageData(np.zeros((1, 8, 8), dtype="uint8"))
+
+    result = _apply_nodata_transparency(image, stack)
+
+    assert result.alpha_mask is None
+
+
+def test_nodata_pixels_render_transparent_in_png() -> None:
+    stack = _stack_with_nodata_pixels()
+    stack[0, :, 0, :] = np.nan  # whole first row nodata in every band of item-0
+    pixels = np.full((1, 4, 4), 7, dtype="uint8")
+    image = _apply_nodata_transparency(ImageData(pixels), stack)
+
+    content, media_type = render_image(image, output_format=ImageType.png)
+
+    assert media_type == "image/png"
+    with Image.open(io.BytesIO(content)) as img:
+        pixels = np.asarray(img.convert("RGBA"))
+    assert pixels[0, 0, 3] == 0  # nodata row is transparent
+    assert pixels[2, 0, 3] == 255  # valid pixel is opaque

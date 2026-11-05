@@ -82,6 +82,7 @@ async def add_stac_array(  # noqa: PLR0913
     viewport_resampling: InterpOptions = "linear",
     stac_search_kwargs: dict[str, Any] | None = None,
     max_nodata_ratio: float | None = None,
+    nodata_transparent: bool = True,
 ) -> str:
     """Add a STAC API source to the TiTiler server.
 
@@ -117,6 +118,10 @@ async def add_stac_array(  # noqa: PLR0913
             exceeds this ratio (between 0 and 1) are dropped before rendering,
             e.g. ``0.9`` drops items that are more than 90% nodata in the tile.
             ``None`` disables the filtering.
+        nodata_transparent: If ``True`` (default), pixels that are nodata in the
+            stacked ``DataArray`` are rendered transparent (alpha 0) in the tile,
+            combined with any alpha mask returned by ``array_to_image``. Set to
+            ``False`` to render nodata pixels with their computed color.
 
     Returns:
         A URL template pointing to the new STAC tile endpoint.
@@ -179,6 +184,7 @@ async def add_stac_array(  # noqa: PLR0913
         viewport_resampling=viewport_resampling,
         stac_search_kwargs=stac_search_kwargs,
         max_nodata_ratio=max_nodata_ratio,
+        nodata_transparent=nodata_transparent,
     )
 
 
