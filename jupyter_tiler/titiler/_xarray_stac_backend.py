@@ -22,6 +22,7 @@ from morecantile import tms as morecantile_tms
 from pydantic import Field
 from pystac_client import ItemSearch
 from pystac_client.stac_api_io import StacApiIO
+from rasterio.enums import Resampling
 from rio_tiler.errors import NoAssetFoundError
 from rio_tiler.models import ImageData
 from rio_tiler.types import ColorMapType
@@ -80,7 +81,7 @@ def _slice_to_bounds(
     return data_array.sel({x_name: x_slice, y_name: y_slice})
 
 
-def _resample_dataarray_to_viewport(
+def _resample_dataarray_to_viewport(  # noqa: PLR0913
     data_array: xarray.DataArray,
     *,
     x_name: str,
@@ -183,8 +184,9 @@ class XarraySTACAPIBackend(STACAPIBackend):
         )
         return list(results.items())
 
-    def tile(  # type: ignore[override]
+    def tile(  # type: ignore[override]  # noqa: PLR0913
         self,
+        *,
         x: int,
         y: int,
         z: int,
@@ -193,7 +195,7 @@ class XarraySTACAPIBackend(STACAPIBackend):
         tilesize: int | None = None,
         max_items: int = 4,
         resolution_scale: float = 1.0,
-        resampling: str = "nearest",
+        resampling: Resampling = Resampling.nearest,
         viewport_width: int = 0,
         viewport_height: int = 0,
         viewport_resampling: InterpOptions = "linear",
@@ -261,6 +263,20 @@ class XarraySTACAPIBackend(STACAPIBackend):
 
 @define(kw_only=True)
 class XarraySTACTilerFactory(BaseFactory):
+    """TiTiler factory serving tiles computed from STAC items as xarrays.
+
+    The STAC API URL (``stac_url``) is a property of the factory: every route
+    registered by this factory queries that same STAC API, so adding several
+    sources to the same app never mixes STAC APIs.
+
+    ``viewport_width``/``viewport_height`` exist because stackstac must pick a
+    single output resolution for the stacked array, defaulting to the finest
+    source resolution, which can be much finer than what is visible on screen.
+    Downsampling the stack to roughly the viewport size avoids computing pixels
+    that are never displayed. The viewport can change dynamically (pan, zoom,
+    resize), so ``0`` disables this and keeps the native tile resolution.
+    """
+
     backend: type[XarraySTACAPIBackend] = XarraySTACAPIBackend
     backend_dependency: type[BackendParams] = BackendParams
 
@@ -278,14 +294,16 @@ class XarraySTACTilerFactory(BaseFactory):
 
     stac_url: str
 
+    # If None, all assets of each item are used (only selection by asset ID
+    # is supported, not by mimetype).
     assets: list[str] | None = None
     max_items: int = 4
     resolution_scale: float = 1.0
-    resampling: str = "nearest"
+    resampling: Resampling = Resampling.nearest
     viewport_width: int = 0
     viewport_height: int = 0
-    viewport_resampling: str = "linear"
-    stac_search_kwargs: dict[str, object] | None = None
+    viewport_resampling: InterpOptions = "linear"
+    stac_search_kwargs: dict[str, Any] | None = None
 
     def register_routes(self) -> None:
         self.tile()
@@ -306,7 +324,7 @@ class XarraySTACTilerFactory(BaseFactory):
             operation_id=f"{self.operation_prefix}getTileWithFormat",
             **img_endpoint_params,
         )
-        def tile(
+        def tile(  # noqa: PLR0913
             z: Annotated[
                 int,
                 Path(
@@ -334,7 +352,7 @@ class XarraySTACTilerFactory(BaseFactory):
                     """,
                 ),
             ],
-            tileMatrixSetId: Annotated[
+            tileMatrixSetId: Annotated[  # noqa: N803
                 Literal["WebMercatorQuad"],
                 Path(
                     description="""
@@ -342,7 +360,7 @@ class XarraySTACTilerFactory(BaseFactory):
                     """
                 ),
             ],
-            format: Annotated[
+            format: Annotated[  # noqa: A002
                 ImageType | None,
                 Field(
                     description="""
@@ -355,14 +373,14 @@ class XarraySTACTilerFactory(BaseFactory):
                 int | None,
                 Query(gt=0, description="Tilesize in pixels."),
             ] = None,
-            search: Search = Depends(self.search_dependency),
-            backend_params: BackendParams = Depends(
+            search: Search = Depends(self.search_dependency),  # noqa: B008
+            backend_params: BackendParams = Depends(  # noqa: B008
                 lambda: BackendParams(url=self.stac_url)
             ),
-            assets_accessor_params: STACAPIExtensionParams = Depends(
+            assets_accessor_params: STACAPIExtensionParams = Depends(  # noqa: B008
                 self.assets_accessor_dependency
             ),
-            render_params: ImageRenderingParams = Depends(self.render_dependency),
+            render_params: ImageRenderingParams = Depends(self.render_dependency),  # noqa: B008
         ) -> Response:
             """Create map tile from a dataset."""
             tms = self.supported_tms.get(tileMatrixSetId)
@@ -373,9 +391,9 @@ class XarraySTACTilerFactory(BaseFactory):
                 **backend_params.as_dict(),
             ) as src_dst:
                 tile = src_dst.tile(
-                    x,
-                    y,
-                    z,
+                    x=x,
+                    y=y,
+                    z=z,
                     assets=self.assets,
                     tilesize=tilesize,
                     search_options=assets_accessor_params.as_dict(),
@@ -385,7 +403,7 @@ class XarraySTACTilerFactory(BaseFactory):
                     viewport_width=self.viewport_width,
                     viewport_height=self.viewport_height,
                     viewport_resampling=self.viewport_resampling,
-                    stac_search_kwargs=self.stac_search_kwargs or {},
+                    stac_search_kwargs=self.stac_search_kwargs,
                 )
 
             with dask.config.set(

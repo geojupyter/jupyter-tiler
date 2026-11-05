@@ -1,10 +1,17 @@
+from typing import get_args
+
 import anyio
 import numpy as np
 import pytest
+from rasterio.enums import Resampling
 from rio_tiler.models import ImageData
 from xarray import DataArray
 
-from jupyter_tiler.titiler._server import TiTilerServer
+from jupyter_tiler.titiler._server import (
+    ResamplingMethod,
+    TiTilerServer,
+    _normalize_resampling,
+)
 
 from .helpers import check_tile, get_tile_image
 from .params import params_for_backend
@@ -78,7 +85,7 @@ class TestTiTilerServer:
             array_to_image=passthrough,
             collection_id="sentinel-2-l2a",
             assets=["B03", "B08"],
-            datetime="2024-01-01/2024-12-31",
+            stac_search_kwargs={"datetime": "2024-01-01/2024-12-31"},
         )
 
         assert tile_url is not None
@@ -88,6 +95,35 @@ class TestTiTilerServer:
             "/collections/sentinel-2-l2a/tiles/WebMercatorQuad/{z}/{x}/{y}.png"
             in tile_url
         )
+
+    @pytest.mark.asyncio
+    async def test_add_stac_array_validates_resampling(
+        self,
+        clean_titiler_server: TiTilerServer,
+    ) -> None:
+        """Test that an invalid resampling name is rejected."""
+
+        def passthrough(_array: DataArray) -> ImageData:
+            raise NotImplementedError
+
+        with pytest.raises(ValueError, match="Invalid resampling"):
+            await clean_titiler_server.add_stac_array(
+                stac_url="https://planetarycomputer.microsoft.com/api/stac/v1",
+                array_to_image=passthrough,
+                collection_id="sentinel-2-l2a",
+                resampling="not-a-resampling",
+            )
+
+
+def test_resampling_method_literal_in_sync_with_rasterio() -> None:
+    """`ResamplingMethod` must list exactly the `rasterio.enums.Resampling` names."""
+    assert set(get_args(ResamplingMethod)) == {member.name for member in Resampling}
+
+
+@pytest.mark.parametrize("name", [member.name for member in Resampling])
+def test_normalize_resampling_accepts_all_rasterio_names(name: str) -> None:
+    """Every rasterio Resampling member name must be accepted and normalized."""
+    assert _normalize_resampling(name) is getattr(Resampling, name)
 
 
 class TestTiTilerServerRestart:
@@ -177,4 +213,4 @@ class TestTiTilerServerCustomColormapRender:
         }
 
         assert unique_colors <= set(colormap.values())
-        assert len(unique_colors) == 2  # noqa: PLR2004
+        assert len(unique_colors) == 2

@@ -1,6 +1,6 @@
 import uuid
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlencode
 
 from fastapi import FastAPI
@@ -14,6 +14,7 @@ from titiler.core.dependencies import DefaultDependency
 from titiler.core.errors import DEFAULT_STATUS_CODES, add_exception_handlers
 from titiler.core.factory import TilerFactory
 from xarray import DataArray
+from xarray.core.types import InterpOptions
 
 from jupyter_tiler._base_server import _FastApiTileServer
 from jupyter_tiler.constants._messages import (
@@ -23,8 +24,28 @@ from jupyter_tiler.constants._messages import (
 from jupyter_tiler.titiler._query import _build_tile_query_params
 from jupyter_tiler.titiler._xarray_stac_backend import XarraySTACTilerFactory
 
+# All names of `rasterio.enums.Resampling` members. Kept in sync with rasterio
+# by a test in `tests/test_titiler_server.py`.
+ResamplingMethod = Literal[
+    "nearest",
+    "bilinear",
+    "cubic",
+    "cubic_spline",
+    "lanczos",
+    "average",
+    "mode",
+    "gauss",
+    "max",
+    "min",
+    "med",
+    "q1",
+    "q3",
+    "sum",
+    "rms",
+]
 
-def _normalize_resampling(value: str | Resampling) -> Resampling:
+
+def _normalize_resampling(value: ResamplingMethod | Resampling) -> Resampling:
     """Normalize a resampling value to a rasterio Resampling enum."""
     if isinstance(value, Resampling):
         return value
@@ -92,29 +113,29 @@ class TiTilerServer(_FastApiTileServer):
             f"?{urlencode(params)}"
         )
 
-    async def add_stac_array(
+    async def add_stac_array(  # noqa: PLR0913
         self,
         stac_url: str,
-        array_to_image: Callable[[DataArray], ImageData],
-        collection_id: str,
         *,
+        collection_id: str,
+        array_to_image: Callable[[DataArray], ImageData],
         assets: list[str] | None = None,
         max_items: int = 4,
         resolution_scale: float = 1.0,
-        resampling: str = "nearest",
-        viewport_width: int = 640,
-        viewport_height: int = 360,
-        viewport_resampling: str = "linear",
-        **kwargs: Any,
+        resampling: ResamplingMethod | Resampling = "nearest",
+        viewport_width: int = 0,
+        viewport_height: int = 0,
+        viewport_resampling: InterpOptions = "linear",
+        stac_search_kwargs: dict[str, Any] | None = None,
     ) -> str:
-        """Add a data array to the TiTiler server."""
+        """Add a STAC API source to the TiTiler server."""
         if max_items < 1:
             raise ValueError("max_items must be >= 1")
         if resolution_scale <= 0:
             raise ValueError("resolution_scale must be > 0")
         if viewport_width < 0 or viewport_height < 0:
             raise ValueError("viewport_width and viewport_height must be >= 0")
-        resampling = _normalize_resampling(resampling)
+        normalized_resampling = _normalize_resampling(resampling)
 
         await self.start()
 
@@ -128,12 +149,12 @@ class TiTilerServer(_FastApiTileServer):
             assets=assets,
             max_items=max_items,
             resolution_scale=resolution_scale,
-            resampling=resampling,
+            resampling=normalized_resampling,
             viewport_width=viewport_width,
             viewport_height=viewport_height,
             viewport_resampling=viewport_resampling,
             array_to_image=array_to_image,
-            stac_search_kwargs=kwargs,
+            stac_search_kwargs=stac_search_kwargs,
         )
 
         prefix = f"{self._base_url}/{source_id}/collections/{collection_id}"
@@ -162,7 +183,7 @@ class TiTilerServer(_FastApiTileServer):
         )
         self._app.include_router(tiler.router, prefix=f"/{source_id}")
 
-    def _add_stac_array_route(
+    def _add_stac_array_route(  # noqa: PLR0913
         self,
         *,
         source_id: str,
@@ -171,11 +192,11 @@ class TiTilerServer(_FastApiTileServer):
         assets: list[str] | None = None,
         max_items: int = 4,
         resolution_scale: float = 1.0,
-        resampling: str = "nearest",
+        resampling: Resampling = Resampling.nearest,
         viewport_width: int = 0,
         viewport_height: int = 0,
-        viewport_resampling: str = "linear",
-        stac_search_kwargs: dict[str, object],
+        viewport_resampling: InterpOptions = "linear",
+        stac_search_kwargs: dict[str, Any] | None = None,
     ) -> None:
         if self._app is None:
             raise RuntimeError(f"{_not_initialized_message} {_found_bug_message}")

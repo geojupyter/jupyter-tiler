@@ -60,7 +60,7 @@ async def test_add_stac_array_uses_custom_collection_and_assets() -> None:
         array_to_image=ndwi_process,
         collection_id="sentinel-2-l2a",
         assets=["B03", "B08"],
-        datetime="2024-01-01/2024-12-31",
+        stac_search_kwargs={"datetime": "2024-01-01/2024-12-31"},
     )
 
     assert (

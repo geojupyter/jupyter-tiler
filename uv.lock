@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12, <3.14"
 resolution-markers = [
     "python_full_version >= '3.13'",
@@ -1936,6 +1936,7 @@ play = [
     { name = "dask" },
     { name = "distributed" },
     { name = "gcsfs" },
+    { name = "ipyleaflet" },
     { name = "jupyterlab-execute-time" },
     { name = "leafmap" },
     { name = "mapclassify" },
@@ -1960,9 +1961,9 @@ requires-dist = [
     { name = "geopandas", specifier = ">=1.0.0" },
     { name = "jupyter-server", specifier = ">=2.4.0,<3" },
     { name = "jupyter-server-proxy", specifier = ">=4.4.0" },
-    { name = "pystac-client" },
+    { name = "pystac-client", specifier = ">=0.9" },
     { name = "rioxarray", specifier = ">=0.19.0" },
-    { name = "stackstac" },
+    { name = "stackstac", specifier = ">=0.5" },
     { name = "titiler-core", specifier = ">=1.1.1" },
     { name = "titiler-stacapi", specifier = ">=2.0.2" },
     { name = "titiler-xarray", specifier = ">=1.1.1" },
@@ -1986,6 +1987,7 @@ play = [
     { name = "dask" },
     { name = "distributed" },
     { name = "gcsfs" },
+    { name = "ipyleaflet" },
     { name = "jupyterlab-execute-time" },
     { name = "leafmap" },
     { name = "mapclassify" },

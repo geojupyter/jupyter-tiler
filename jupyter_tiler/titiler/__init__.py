@@ -2,12 +2,14 @@ from collections.abc import Callable
 from functools import cache
 from typing import Any
 
+from rasterio.enums import Resampling
 from rio_tiler.models import ImageData
 from rio_tiler.types import ColorMapType
 from titiler.core.algorithm.base import BaseAlgorithm
 from xarray import DataArray
+from xarray.core.types import InterpOptions
 
-from jupyter_tiler.titiler._server import TiTilerServer
+from jupyter_tiler.titiler._server import ResamplingMethod, TiTilerServer
 
 
 @cache
@@ -66,19 +68,19 @@ async def add_data_array(  # noqa: PLR0913
     )
 
 
-async def add_stac_array(
+async def add_stac_array(  # noqa: PLR0913
     stac_url: str,
+    *,
     collection_id: str,
     array_to_image: Callable[[DataArray], ImageData],
-    *,
     assets: list[str] | None = None,
     max_items: int = 4,
     resolution_scale: float = 1.0,
-    resampling: str = "nearest",
+    resampling: ResamplingMethod | Resampling = "nearest",
     viewport_width: int = 0,
     viewport_height: int = 0,
-    viewport_resampling: str = "linear",
-    **kwargs: str | int,
+    viewport_resampling: InterpOptions = "linear",
+    stac_search_kwargs: dict[str, Any] | None = None,
 ) -> str:
     """Add a STAC API source to the TiTiler server.
 
@@ -90,21 +92,38 @@ async def add_stac_array(
         stac_url: Root STAC API URL.
         collection_id: STAC collection ID used in the tile URL path.
         array_to_image: Callable converting a stackstac ``DataArray`` to ``ImageData``.
-        assets: Optional STAC asset names passed to stackstac.
+        assets: Optional STAC asset names passed to stackstac. Only selection by
+            asset ID is supported. If ``None``, all assets of each item are used.
         max_items: Max number of STAC items to combine per tile. Lower is faster.
         resolution_scale: Multiplier applied to stackstac output resolution.
-            Values greater than ``1`` reduce detail and improve performance.
-        resampling: stackstac resampling method, e.g. ``nearest`` or ``bilinear``.
+            Values greater than ``1`` produce a lower resolution output, reducing
+            detail and improving performance.
+        resampling: Resampling method applied by stackstac when reprojecting the
+            items onto the tile grid. One of the ``rasterio.enums.Resampling``
+            member names, e.g. ``nearest`` or ``bilinear``.
         viewport_width: Optional target viewport width in pixels for post-stack
             downsampling. ``0`` disables viewport resampling.
         viewport_height: Optional target viewport height in pixels for post-stack
             downsampling. ``0`` disables viewport resampling.
         viewport_resampling: Interpolation method for viewport downsampling.
             Typical values are ``linear`` or ``nearest``.
-        kwargs: Extra STAC API search parameters applied to every tile request.
+        stac_search_kwargs: Extra STAC API search parameters applied to every tile
+            request, e.g. ``{"datetime": "2024-01-01/2024-12-31", "query": {...}}``.
+            See the `ItemSearch API from pystac-client
+            <https://pystac-client.readthedocs.io/en/stable/api.html#pystac_client.ItemSearch>`_
+            for details.
 
     Returns:
         A URL template pointing to the new STAC tile endpoint.
+
+    Note:
+        ``viewport_width``/``viewport_height`` exist because stackstac must pick a
+        single output resolution for the stacked array, defaulting to the finest
+        source resolution which can be much finer than what is visible on screen.
+        Downsampling the stack to roughly the viewport size avoids computing (and
+        transferring) pixels that are never displayed. Since the viewport can
+        change dynamically (pan/zoom/resize), these are per-source defaults; pass
+        ``0`` to disable and keep the native tile resolution.
 
     Example:
         NDWI process function:
@@ -115,9 +134,6 @@ async def add_stac_array(
             from rio_tiler.models import ImageData
 
             def ndwi_process(data):
-                h = data.sizes.get("y", 256)
-                w = data.sizes.get("x", 256)
-
                 if "time" in data.dims:
                     # pick one scene OR use median over time; choose one
                     data = data.isel(time=0)
@@ -135,15 +151,20 @@ async def add_stac_array(
                 return ImageData(pixels[np.newaxis, :, :])  # 3D: 1, y, x
 
             raster_url = await add_stac_array(
-                stac_url,
+                "https://earth-search.aws.element84.com/v1",
                 collection_id="sentinel-2-l2a",
+                array_to_image=ndwi_process,
                 assets=["green", "nir"],
-                array_to_image=ndwi_process
+                stac_search_kwargs={
+                    "datetime": "2024-06-01/2024-09-30",
+                    "query": {"eo:cloud_cover": {"lt": 20}},
+                },
             )
     """
     return await _get_server().add_stac_array(
         stac_url=stac_url,
         collection_id=collection_id,
+        array_to_image=array_to_image,
         assets=assets,
         max_items=max_items,
         resolution_scale=resolution_scale,
@@ -151,8 +172,7 @@ async def add_stac_array(
         viewport_width=viewport_width,
         viewport_height=viewport_height,
         viewport_resampling=viewport_resampling,
-        array_to_image=array_to_image,
-        **kwargs,
+        stac_search_kwargs=stac_search_kwargs,
     )
 
 

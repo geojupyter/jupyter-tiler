@@ -93,7 +93,7 @@ class _FastApiTileServer(ABC):
         data_array: DataArray,
         *,
         colormap_range: tuple[float, float] | None = None,
-        **kwargs: Any,
+        **kwargs: Any,  # noqa: ANN401
     ) -> str:
         """Add a data array to the tile server.
 
@@ -168,7 +168,7 @@ class _FastApiTileServer(ABC):
         *,
         source_id: str,
         data_array: DataArray,
-        **kwargs: Any,
+        **kwargs: Any,  # noqa: ANN401
     ) -> None: ...
 
     @property
