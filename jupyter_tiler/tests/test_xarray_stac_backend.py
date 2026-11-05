@@ -1,9 +1,19 @@
+import asyncio
 import io
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
 
+import httpx
+import morecantile
 import numpy as np
+import pystac
 import pytest
+import rasterio
 import xarray as xr
+from geojson_pydantic.geometries import Geometry
 from PIL import Image
+from rasterio.transform import from_origin
 from rio_tiler.models import ImageData
 from titiler.core.resources.enums import ImageType
 from titiler.core.utils import render_image
@@ -11,6 +21,7 @@ from xarray import DataArray
 
 from jupyter_tiler.titiler._server import TiTilerServer
 from jupyter_tiler.titiler._xarray_stac_backend import (
+    XarraySTACAPIBackend,
     _apply_nodata_transparency,
     _filter_items_by_nodata,
     _nodata_alpha_mask,
@@ -165,3 +176,138 @@ def test_nodata_pixels_render_transparent_in_png() -> None:
         pixels = np.asarray(img.convert("RGBA"))
     assert pixels[0, 0, 3] == 0  # nodata row is transparent
     assert pixels[2, 0, 3] == 255  # valid pixel is opaque
+
+
+# Extent of the fake STAC items: lon [-3.0, -2.5], lat [47.2, 47.7]
+_FAKE_ITEM_BOUNDS = (-3.0, 47.2, -2.5, 47.7)
+
+
+def _make_local_stac_items(tmp_path: Path, n_items: int = 3) -> list[pystac.Item]:
+    """Create local COGs + matching pystac items, so tile requests need no network."""
+    west, south, east, north = _FAKE_ITEM_BOUNDS
+    res = (east - west) / 200
+    transform = from_origin(west, north, res, res)
+    geometry = {
+        "type": "Polygon",
+        "coordinates": [
+            [
+                [west, south],
+                [east, south],
+                [east, north],
+                [west, north],
+                [west, south],
+            ]
+        ],
+    }
+    items = []
+    for i in range(n_items):
+        tif = tmp_path / f"item-{i}.tif"
+        data = (np.random.default_rng(i).random((200, 200)) * 1000).astype("uint16")
+        data[80:120, 80:120] = 0  # nodata patch overlapping the center tile
+        with rasterio.open(
+            tif,
+            "w",
+            driver="GTiff",
+            width=200,
+            height=200,
+            count=1,
+            dtype="uint16",
+            crs="EPSG:4326",
+            transform=transform,
+            nodata=0,
+        ) as ds:
+            ds.write(data, 1)
+        item = pystac.Item(
+            id=f"item-{i}",
+            collection="test",
+            geometry=geometry,
+            bbox=[west, south, east, north],
+            datetime=datetime(2024, 6, 15, tzinfo=UTC),
+            properties={},
+        )
+        proj_fields = {
+            "proj:epsg": 4326,
+            "proj:shape": [200, 200],
+            "proj:transform": [res, 0, west, 0, -res, north],
+            "raster:bands": [{"nodata": 0}],
+        }
+        for band in ("green", "nir"):
+            item.add_asset(band, pystac.Asset(href=str(tif), extra_fields=proj_fields))
+        items.append(item)
+    return items
+
+
+def _ndwi(array: DataArray) -> ImageData:
+    if "time" in array.dims:
+        array = array.isel(time=0)
+    green = array.sel(band="green").data.astype(np.float32)
+    nir = array.sel(band="nir").data.astype(np.float32)
+    ndwi = (green - nir) / (green + nir + 1e-6)
+    ndwi = np.nan_to_num(np.asarray(ndwi), nan=-1.0, posinf=1.0, neginf=-1.0)
+    pixels = (np.clip((ndwi + 1.0) / 2.0, 0.0, 1.0) * 255).astype(np.uint8)
+    return ImageData(pixels[np.newaxis, :, :])
+
+
+@pytest.mark.asyncio
+async def test_multiple_stac_tiles_load_concurrently(
+    clean_titiler_server: TiTilerServer,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fetch a burst of STAC tiles at once (like a map viewport) and check they
+    all load: 200 responses, valid PNGs, and real (non-transparent) pixels."""
+    items = _make_local_stac_items(tmp_path)
+
+    # No STAC API in tests: every tile search returns the local items
+    def fake_get_assets(
+        self: XarraySTACAPIBackend,
+        geom: Geometry,
+        **kwargs: Any,  # noqa: ANN401
+    ) -> list[pystac.Item]:
+        return items
+
+    monkeypatch.setattr(XarraySTACAPIBackend, "get_assets", fake_get_assets)
+
+    tile_url = await clean_titiler_server.add_stac_array(
+        stac_url="http://fake-stac",
+        array_to_image=_ndwi,
+        collection_id="test",
+        assets=["green", "nir"],
+        max_items=3,
+        max_nodata_ratio=0.9,
+    )
+    base_url = f"http://localhost:{tile_url.removeprefix('/proxy/')}"
+
+    tms = morecantile.tms.get("WebMercatorQuad")
+    center = tms.tile(-2.75, 47.45, 12)
+    tiles = [
+        (12, center.x + dx, center.y + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)
+    ]
+
+    async def fetch(
+        client: httpx.AsyncClient, z: int, x: int, y: int
+    ) -> httpx.Response:
+        url = base_url.format(z=z, x=x, y=y)
+        return await client.get(url, timeout=60)
+
+    async with httpx.AsyncClient() as client:
+        responses = await asyncio.gather(*(fetch(client, *t) for t in tiles))
+        # a tile far outside the item extent must fail fast with a clean
+        # client error, not hang or 500
+        outside = await fetch(client, 12, center.x + 10, center.y)
+
+    assert outside.status_code == 404
+
+    assert len(responses) == 9
+    any_transparent = False
+    for resp in responses:
+        assert resp.status_code == 200, resp.text[:200]
+        assert resp.content[:8] == b"\x89PNG\r\n\x1a\n"
+        with Image.open(io.BytesIO(resp.content)) as img:
+            rgba = np.asarray(img.convert("RGBA"))
+        assert rgba.shape == (256, 256, 4)
+        # the fake items cover these tiles, so pixels must not be all transparent
+        assert rgba[:, :, 3].max() == 255
+        # the nodata corner of the rasters must be rendered transparent somewhere
+        any_transparent |= bool((rgba[:, :, 3] == 0).any())
+    assert any_transparent

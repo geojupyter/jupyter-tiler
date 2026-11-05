@@ -3,7 +3,7 @@ import os
 from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from threading import Lock
+from threading import BoundedSemaphore, Lock
 from typing import Annotated, Any, Literal, cast
 
 import attr
@@ -27,6 +27,7 @@ from rio_tiler.errors import NoAssetFoundError
 from rio_tiler.models import ImageData
 from rio_tiler.types import ColorMapType
 from rio_tiler.utils import Timer
+from stackstac.rio_env import LayeredEnv
 from starlette.responses import Response
 from titiler.core.dependencies import (
     ColorMapParams,
@@ -53,6 +54,32 @@ items_config = ItemsSettings(max_items=8)
 
 ttl_cache: Any = TTLCache(maxsize=cache_config.maxsize, ttl=cache_config.ttl)
 _DEFAULT_DASK_WORKERS = max(1, min(8, os.cpu_count() or 1))
+
+# GDAL config used when reading remote assets: unlike stackstac's default env,
+# it sets HTTP timeouts/retries so a stalled request fails instead of blocking
+# GDAL's shared curl handle forever (which would hang every concurrent tile).
+_GDAL_ENV = LayeredEnv(
+    always={
+        "GDAL_HTTP_MULTIRANGE": "YES",
+        "GDAL_HTTP_MERGE_CONSECUTIVE_RANGES": "YES",
+        "GDAL_HTTP_TIMEOUT": "30",
+        "GDAL_HTTP_MAX_RETRY": "3",
+        "GDAL_HTTP_RETRY_DELAY": "0.5",
+    },
+    open={
+        "GDAL_DISABLE_READDIR_ON_OPEN": "EMPTY_DIR",
+        "VSI_CACHE": True,
+    },
+    read={"VSI_CACHE": False},
+)
+
+# Max number of tiles whose stackstac reads run at the same time. Concurrent
+# remote (/vsicurl) reads contend on GDAL's curl handle, so unbounded
+# concurrency makes tile bursts pathologically slow.
+_TILE_COMPUTE_SEMAPHORE = BoundedSemaphore(4)
+
+# Timeout (seconds) for STAC API search requests.
+_STAC_HTTP_TIMEOUT = 30
 
 
 def _slice_to_bounds(
@@ -228,6 +255,7 @@ class XarraySTACAPIBackend(STACAPIBackend):
                 backoff_factor=retry_config.retry_factor,
             ),
             headers=self.api_params.get("headers", {}),
+            timeout=_STAC_HTTP_TIMEOUT,
         )
 
         params = {
@@ -283,6 +311,23 @@ class XarraySTACAPIBackend(STACAPIBackend):
         if not mosaic_assets:
             raise NoAssetFoundError(f"No assets found for tile {z}-{x}-{y}")
 
+        # Drop items whose bbox does not intersect the tile: stackstac errors
+        # out ("Empty reader_table") when no item overlaps the requested bounds.
+        tile_geo_bounds = self.tms.bounds(Tile(x, y, z))
+        mosaic_assets = [
+            item
+            for item in mosaic_assets
+            if item.bbox is None
+            or not (
+                item.bbox[2] < tile_geo_bounds.left
+                or item.bbox[0] > tile_geo_bounds.right
+                or item.bbox[3] < tile_geo_bounds.bottom
+                or item.bbox[1] > tile_geo_bounds.top
+            )
+        ]
+        if not mosaic_assets:
+            raise NoAssetFoundError(f"No assets found for tile {z}-{x}-{y}")
+
         matrix = self.tms.matrix(z)
         height = tilesize or matrix.tileHeight
         width = tilesize or matrix.tileWidth
@@ -295,37 +340,46 @@ class XarraySTACAPIBackend(STACAPIBackend):
             y_res * resolution_scale,
         )
 
-        # Create Xarray DataArray from stac items
-        plain_items = [item.to_dict(transform_hrefs=False) for item in mosaic_assets]
-        xr_stack = stackstac.stack(
-            plain_items,
-            assets=assets,
-            epsg=self.tms.crs.to_epsg(),
-            bounds=bounds,
-            resolution=effective_resolution,
-            resampling=resampling,
-        )
-        xr_stack = _slice_to_bounds(xr_stack, bounds)
-
-        if max_nodata_ratio is not None:
-            xr_stack, keep = _filter_items_by_nodata(xr_stack, max_nodata_ratio)
-            mosaic_assets = [
-                item for item, kept in zip(mosaic_assets, keep, strict=True) if kept
+        # Create Xarray DataArray from stac items. The semaphore bounds how many
+        # tiles read remote assets at once: concurrent /vsicurl reads contend on
+        # GDAL's shared curl handle and make tile bursts pathologically slow.
+        # Computing the stack here reads the asset pixels exactly once per
+        # tile; the nodata filter, transparency mask and ``array_to_image``
+        # downstream all reuse the in-memory result.
+        with _TILE_COMPUTE_SEMAPHORE:
+            plain_items = [
+                item.to_dict(transform_hrefs=False) for item in mosaic_assets
             ]
-            if not mosaic_assets:
-                raise NoAssetFoundError(
-                    f"All assets for tile {z}-{x}-{y} have more than "
-                    f"{max_nodata_ratio:.0%} nodata"
-                )
+            xr_stack = stackstac.stack(
+                plain_items,
+                assets=assets,
+                epsg=self.tms.crs.to_epsg(),
+                bounds=bounds,
+                resolution=effective_resolution,
+                resampling=resampling,
+                gdal_env=_GDAL_ENV,
+            )
+            xr_stack = _slice_to_bounds(xr_stack, bounds).compute()
 
-        xr_stack = _resample_dataarray_to_viewport(
-            xr_stack,
-            x_name="x",
-            y_name="y",
-            viewport_width=viewport_width,
-            viewport_height=viewport_height,
-            method=viewport_resampling,
-        )
+            if max_nodata_ratio is not None:
+                xr_stack, keep = _filter_items_by_nodata(xr_stack, max_nodata_ratio)
+                mosaic_assets = [
+                    item for item, kept in zip(mosaic_assets, keep, strict=True) if kept
+                ]
+                if not mosaic_assets:
+                    raise NoAssetFoundError(
+                        f"All assets for tile {z}-{x}-{y} have more than "
+                        f"{max_nodata_ratio:.0%} nodata"
+                    )
+
+            xr_stack = _resample_dataarray_to_viewport(
+                xr_stack,
+                x_name="x",
+                y_name="y",
+                viewport_width=viewport_width,
+                viewport_height=viewport_height,
+                method=viewport_resampling,
+            )
 
         asset_used = [self.asset_name(asset) for asset in mosaic_assets]
 

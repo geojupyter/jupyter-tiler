@@ -122,7 +122,10 @@ module = [
     "titiler.*",
     "xpublish.*",
     "stackstac",
+    "stackstac.rio_env",
+    "rasterio",
     "rasterio.enums",
+    "rasterio.transform",
 ]
 ignore_missing_imports = true
 

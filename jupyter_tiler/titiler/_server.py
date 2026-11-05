@@ -5,6 +5,7 @@ from urllib.parse import urlencode
 
 from fastapi import FastAPI
 from rasterio.enums import Resampling
+from rio_tiler.errors import NoAssetFoundError
 from rio_tiler.io.xarray import XarrayReader
 from rio_tiler.models import ImageData
 from rio_tiler.types import ColorMapType
@@ -71,7 +72,12 @@ class TiTilerServer(_FastApiTileServer):
             docs_url=None,
             redoc_url=None,
         )
-        add_exception_handlers(app, DEFAULT_STATUS_CODES)
+        # Tiles with no STAC items are a normal case (e.g. ocean tiles), so
+        # report them as 404 instead of the default 500, like map clients expect.
+        add_exception_handlers(
+            app,
+            {**DEFAULT_STATUS_CODES, NoAssetFoundError: 404},
+        )
         return app
 
     async def add_data_array(  # noqa: PLR0913
