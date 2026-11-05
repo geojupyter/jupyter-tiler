@@ -259,11 +259,14 @@ async def test_multiple_stac_tiles_load_concurrently(
     items = _make_local_stac_items(tmp_path)
 
     # No STAC API in tests: every tile search returns the local items
+    search_calls: list[Geometry] = []
+
     def fake_get_assets(
         self: XarraySTACAPIBackend,
         geom: Geometry,
         **kwargs: Any,  # noqa: ANN401
     ) -> list[pystac.Item]:
+        search_calls.append(geom)
         return items
 
     monkeypatch.setattr(XarraySTACAPIBackend, "get_assets", fake_get_assets)
@@ -297,6 +300,10 @@ async def test_multiple_stac_tiles_load_concurrently(
         outside = await fetch(client, 12, center.x + 10, center.y)
 
     assert outside.status_code == 404
+
+    # the 3x3 burst was coalesced into a single STAC search over the union
+    # bounds; the out-of-extent tile fired afterwards forms its own batch
+    assert len(search_calls) == 2
 
     assert len(responses) == 9
     any_transparent = False

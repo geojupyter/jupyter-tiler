@@ -1,10 +1,11 @@
 import json
 import os
+import time
 from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from threading import BoundedSemaphore, Lock
-from typing import Annotated, Any, Literal, cast
+from threading import BoundedSemaphore, Condition, Event, Lock
+from typing import Annotated, Any, Literal
 
 import attr
 import dask
@@ -16,6 +17,7 @@ from attrs import define
 from cachetools import TTLCache, cached
 from cachetools.keys import hashkey
 from fastapi import Depends, Path, Query
+from geojson_pydantic import Polygon
 from geojson_pydantic.geometries import Geometry
 from morecantile import Tile, TileMatrixSets
 from morecantile import tms as morecantile_tms
@@ -26,7 +28,6 @@ from rasterio.enums import Resampling
 from rio_tiler.errors import NoAssetFoundError
 from rio_tiler.models import ImageData
 from rio_tiler.types import ColorMapType
-from rio_tiler.utils import Timer
 from stackstac.rio_env import LayeredEnv
 from starlette.responses import Response
 from titiler.core.dependencies import (
@@ -73,13 +74,99 @@ _GDAL_ENV = LayeredEnv(
     read={"VSI_CACHE": False},
 )
 
-# Max number of tiles whose stackstac reads run at the same time. Concurrent
-# remote (/vsicurl) reads contend on GDAL's curl handle, so unbounded
-# concurrency makes tile bursts pathologically slow.
+# Max number of tile batches whose stackstac reads run at the same time.
+# Concurrent remote (/vsicurl) reads contend on GDAL's curl handle, so
+# unbounded concurrency makes tile bursts pathologically slow.
 _TILE_COMPUTE_SEMAPHORE = BoundedSemaphore(4)
 
 # Timeout (seconds) for STAC API search requests.
 _STAC_HTTP_TIMEOUT = 30
+
+# Tile batching: concurrent same-z tile requests (what a map viewport fires)
+# are coalesced into a single STAC search + asset read over their union bounds.
+_BATCH_WINDOW_SECONDS = 0.1  # how long the leader waits for more tiles to join
+_MAX_BATCH_TILES = 25
+_BATCH_WAIT_TIMEOUT = 120.0  # max time a follower waits for its batch to finish
+
+
+class _TileRequest:
+    """One tile request waiting inside a batch."""
+
+    __slots__ = ("array", "error", "event", "x", "y")
+
+    def __init__(self, x: int, y: int) -> None:
+        self.x = x
+        self.y = y
+        self.event = Event()
+        self.array: xarray.DataArray | None = None
+        self.error: Exception | None = None
+
+
+class _TileBatcher:
+    """Coalesce concurrent same-z tile requests into one batch.
+
+    The first request for a z level becomes the batch leader: it collects
+    other requests arriving within ``window`` seconds (up to ``max_batch``),
+    then runs ``compute(batch)`` once for all of them. Followers simply wait
+    on their event. This turns a burst of adjacent tile requests into a
+    single STAC search and a single stackstac read over the union bounds.
+    """
+
+    def __init__(
+        self,
+        window: float = _BATCH_WINDOW_SECONDS,
+        max_batch: int = _MAX_BATCH_TILES,
+    ) -> None:
+        self.window = window
+        self.max_batch = max_batch
+        self._cond = Condition()
+        self._open_batches: dict[int, list[_TileRequest]] = {}
+
+    def submit(
+        self,
+        z: int,
+        x: int,
+        y: int,
+        compute: Callable[[list[_TileRequest]], None],
+    ) -> _TileRequest:
+        """Submit a tile request; returns once its batch has been computed."""
+        req = _TileRequest(x, y)
+        with self._cond:
+            existing = self._open_batches.get(z)
+            if existing is None:
+                batch: list[_TileRequest] = []
+                self._open_batches[z] = batch
+                leader = True
+            else:
+                batch = existing
+                leader = False
+            batch.append(req)
+            self._cond.notify_all()
+
+        if not leader:
+            if not req.event.wait(timeout=_BATCH_WAIT_TIMEOUT):
+                raise TimeoutError(f"Timed out waiting for tile batch z={z}")
+            return req
+
+        # Leader: collect followers during the window, then compute the batch
+        # exactly once and wake everyone up.
+        deadline = time.monotonic() + self.window
+        with self._cond:
+            while len(batch) < self.max_batch:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                self._cond.wait(timeout=remaining)
+            del self._open_batches[z]
+        try:
+            compute(batch)
+        except Exception as e:  # noqa: BLE001
+            for r in batch:
+                r.error = e
+        finally:
+            for r in batch:
+                r.event.set()
+        return req
 
 
 def _slice_to_bounds(
@@ -270,6 +357,156 @@ class XarraySTACAPIBackend(STACAPIBackend):
         )
         return list(results.items())
 
+    @staticmethod
+    def _bbox_intersects(
+        item: pystac.Item,
+        geo_bounds: tuple[float, float, float, float],
+    ) -> bool:
+        """Whether an item's bbox intersects geographic (w, s, e, n) bounds."""
+        if item.bbox is None:
+            return True
+        west, south, east, north = geo_bounds
+        return not (
+            item.bbox[2] < west
+            or item.bbox[0] > east
+            or item.bbox[3] < south
+            or item.bbox[1] > north
+        )
+
+    @staticmethod
+    def _make_search_options(
+        search_options: dict[str, Any] | None,
+        max_items: int,
+        stac_search_kwargs: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        return {
+            **(search_options or {}),
+            "limit": max_items,
+            "max_items": max_items,
+            "stac_search_kwargs": json.dumps(OrderedDict(stac_search_kwargs or {})),
+        }
+
+    def stack_tiles(  # noqa: PLR0913
+        self,
+        z: int,
+        tiles: list[tuple[int, int]],
+        *,
+        assets: list[str] | None = None,
+        search_options: dict[str, Any] | None = None,
+        tilesize: int | None = None,
+        max_items: int = 4,
+        resolution_scale: float = 1.0,
+        resampling: Resampling = Resampling.nearest,
+        viewport_width: int = 0,
+        viewport_height: int = 0,
+        viewport_resampling: InterpOptions = "linear",
+        stac_search_kwargs: dict[str, Any] | None = None,
+        max_nodata_ratio: float | None = None,
+    ) -> dict[tuple[int, int], tuple[xarray.DataArray, list[str]] | NoAssetFoundError]:
+        """Stack several same-z tiles with a single STAC search and asset read.
+
+        All tiles are read at once over the union of their bounds, then sliced
+        back out per tile. Returns a mapping of ``(x, y)`` to the per-tile
+        ``(DataArray, asset names)`` pair, or to the ``NoAssetFoundError`` that
+        tile should raise.
+        """
+        search_options = self._make_search_options(
+            search_options, max_items, stac_search_kwargs
+        )
+
+        matrix = self.tms.matrix(z)
+        tile_height = tilesize or matrix.tileHeight
+        tile_width = tilesize or matrix.tileWidth
+
+        xs = [x for x, _ in tiles]
+        ys = [y for _, y in tiles]
+        x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+        corner_a = self.tms.xy_bounds(Tile(x0, y0, z))
+        corner_b = self.tms.xy_bounds(Tile(x1, y1, z))
+        union_bounds = (corner_a.left, corner_b.bottom, corner_b.right, corner_a.top)
+        geo_a = self.tms.bounds(Tile(x0, y0, z))
+        geo_b = self.tms.bounds(Tile(x1, y1, z))
+        union_geo = (geo_a.left, geo_b.bottom, geo_b.right, geo_a.top)
+
+        # One search + one read for the whole batch. The semaphore throttles
+        # how many batches read remote assets at once: concurrent /vsicurl
+        # reads contend on GDAL's curl handle and make bursts pathologically
+        # slow. Computing here reads the asset pixels exactly once per batch.
+        with _TILE_COMPUTE_SEMAPHORE:
+            items = self.get_assets(Polygon.from_bounds(*union_geo), **search_options)
+            # Drop items whose bbox does not intersect the union: stackstac
+            # errors out ("Empty reader_table") when no item overlaps.
+            items = [i for i in items if self._bbox_intersects(i, union_geo)]
+            if not items:
+                err = NoAssetFoundError(f"No assets found for tiles at z={z}")
+                return dict.fromkeys(tiles, err)
+
+            x_res = (union_bounds[2] - union_bounds[0]) / (tile_width * (x1 - x0 + 1))
+            y_res = (union_bounds[3] - union_bounds[1]) / (tile_height * (y1 - y0 + 1))
+            effective_resolution = (
+                x_res * resolution_scale,
+                y_res * resolution_scale,
+            )
+            plain_items = [item.to_dict(transform_hrefs=False) for item in items]
+            union_stack = stackstac.stack(
+                plain_items,
+                assets=assets,
+                epsg=self.tms.crs.to_epsg(),
+                bounds=union_bounds,
+                resolution=effective_resolution,
+                resampling=resampling,
+                gdal_env=_GDAL_ENV,
+            )
+            union_stack = _slice_to_bounds(union_stack, union_bounds).compute()
+
+        results: dict[
+            tuple[int, int], tuple[xarray.DataArray, list[str]] | NoAssetFoundError
+        ] = {}
+        for x, y in tiles:
+            tile_bounds = self.tms.xy_bounds(Tile(x, y, z))
+            tile_geo = self.tms.bounds(Tile(x, y, z))
+            keep_bbox = np.array(
+                [self._bbox_intersects(item, tile_geo) for item in items]
+            )
+            if not keep_bbox.any():
+                results[(x, y)] = NoAssetFoundError(
+                    f"No assets found for tile {z}-{x}-{y}"
+                )
+                continue
+
+            tile_items = [
+                item for item, keep in zip(items, keep_bbox, strict=True) if keep
+            ]
+            tile_stack = _slice_to_bounds(union_stack, tile_bounds)
+            if "time" in tile_stack.dims:
+                tile_stack = tile_stack.isel(time=np.flatnonzero(keep_bbox))
+
+            if max_nodata_ratio is not None:
+                tile_stack, keep = _filter_items_by_nodata(tile_stack, max_nodata_ratio)
+                tile_items = [
+                    item for item, kept in zip(tile_items, keep, strict=True) if kept
+                ]
+                if not tile_items:
+                    results[(x, y)] = NoAssetFoundError(
+                        f"All assets for tile {z}-{x}-{y} have more than "
+                        f"{max_nodata_ratio:.0%} nodata"
+                    )
+                    continue
+
+            tile_stack = _resample_dataarray_to_viewport(
+                tile_stack,
+                x_name="x",
+                y_name="y",
+                viewport_width=viewport_width,
+                viewport_height=viewport_height,
+                method=viewport_resampling,
+            )
+            results[(x, y)] = (
+                tile_stack,
+                [self.asset_name(item) for item in tile_items],
+            )
+        return results
+
     def tile(  # type: ignore[override]  # noqa: PLR0913
         self,
         *,
@@ -289,101 +526,24 @@ class XarraySTACAPIBackend(STACAPIBackend):
         max_nodata_ratio: float | None = None,
     ) -> tuple[xarray.DataArray, list[str]]:
         """Get Tile from multiple assets."""
-        timings = []
-        with Timer() as t:
-            search_options = {
-                **(search_options or {}),
-                "limit": max_items,
-                "max_items": max_items,
-                "stac_search_kwargs": json.dumps(OrderedDict(stac_search_kwargs or {})),
-            }
-
-            # NOTE: This might raise typing issue because in the original backend
-            # `assets_for_tile`
-            # return a list of dict, but in our custom backend it return a list
-            # of `pystac.Item`
-            mosaic_assets = cast(
-                "list[pystac.Item]",
-                self.assets_for_tile(x, y, z, **search_options),
-            )
-        timings.append(("search", round(t.elapsed * 1000, 2)))
-
-        if not mosaic_assets:
-            raise NoAssetFoundError(f"No assets found for tile {z}-{x}-{y}")
-
-        # Drop items whose bbox does not intersect the tile: stackstac errors
-        # out ("Empty reader_table") when no item overlaps the requested bounds.
-        tile_geo_bounds = self.tms.bounds(Tile(x, y, z))
-        mosaic_assets = [
-            item
-            for item in mosaic_assets
-            if item.bbox is None
-            or not (
-                item.bbox[2] < tile_geo_bounds.left
-                or item.bbox[0] > tile_geo_bounds.right
-                or item.bbox[3] < tile_geo_bounds.bottom
-                or item.bbox[1] > tile_geo_bounds.top
-            )
-        ]
-        if not mosaic_assets:
-            raise NoAssetFoundError(f"No assets found for tile {z}-{x}-{y}")
-
-        matrix = self.tms.matrix(z)
-        height = tilesize or matrix.tileHeight
-        width = tilesize or matrix.tileWidth
-
-        bounds = self.tms.xy_bounds(Tile(x, y, z))
-        x_res = (bounds[2] - bounds[0]) / width
-        y_res = (bounds[3] - bounds[1]) / height
-        effective_resolution = (
-            x_res * resolution_scale,
-            y_res * resolution_scale,
-        )
-
-        # Create Xarray DataArray from stac items. The semaphore bounds how many
-        # tiles read remote assets at once: concurrent /vsicurl reads contend on
-        # GDAL's shared curl handle and make tile bursts pathologically slow.
-        # Computing the stack here reads the asset pixels exactly once per
-        # tile; the nodata filter, transparency mask and ``array_to_image``
-        # downstream all reuse the in-memory result.
-        with _TILE_COMPUTE_SEMAPHORE:
-            plain_items = [
-                item.to_dict(transform_hrefs=False) for item in mosaic_assets
-            ]
-            xr_stack = stackstac.stack(
-                plain_items,
-                assets=assets,
-                epsg=self.tms.crs.to_epsg(),
-                bounds=bounds,
-                resolution=effective_resolution,
-                resampling=resampling,
-                gdal_env=_GDAL_ENV,
-            )
-            xr_stack = _slice_to_bounds(xr_stack, bounds).compute()
-
-            if max_nodata_ratio is not None:
-                xr_stack, keep = _filter_items_by_nodata(xr_stack, max_nodata_ratio)
-                mosaic_assets = [
-                    item for item, kept in zip(mosaic_assets, keep, strict=True) if kept
-                ]
-                if not mosaic_assets:
-                    raise NoAssetFoundError(
-                        f"All assets for tile {z}-{x}-{y} have more than "
-                        f"{max_nodata_ratio:.0%} nodata"
-                    )
-
-            xr_stack = _resample_dataarray_to_viewport(
-                xr_stack,
-                x_name="x",
-                y_name="y",
-                viewport_width=viewport_width,
-                viewport_height=viewport_height,
-                method=viewport_resampling,
-            )
-
-        asset_used = [self.asset_name(asset) for asset in mosaic_assets]
-
-        return xr_stack, asset_used
+        result = self.stack_tiles(
+            z,
+            [(x, y)],
+            assets=assets,
+            search_options=search_options,
+            tilesize=tilesize,
+            max_items=max_items,
+            resolution_scale=resolution_scale,
+            resampling=resampling,
+            viewport_width=viewport_width,
+            viewport_height=viewport_height,
+            viewport_resampling=viewport_resampling,
+            stac_search_kwargs=stac_search_kwargs,
+            max_nodata_ratio=max_nodata_ratio,
+        )[(x, y)]
+        if isinstance(result, NoAssetFoundError):
+            raise result
+        return result
 
 
 @define(kw_only=True)
@@ -435,6 +595,14 @@ class XarraySTACTilerFactory(BaseFactory):
     # If True (default), pixels that are nodata in the stacked DataArray are
     # rendered transparent (alpha 0) in the tile image.
     nodata_transparent: bool = True
+
+    # Coalesces concurrent same-z tile requests into one batched read. Built
+    # from the module constants in __attrs_post_init__ so tests can patch them.
+    _batcher: _TileBatcher = field(init=False, repr=False)  # noqa: RUF009
+
+    def __attrs_post_init__(self) -> None:
+        self._batcher = _TileBatcher(_BATCH_WINDOW_SECONDS, _MAX_BATCH_TILES)
+        super().__attrs_post_init__()  # type: ignore[no-untyped-call]
 
     def register_routes(self) -> None:
         self.tile()
@@ -516,35 +684,50 @@ class XarraySTACTilerFactory(BaseFactory):
             """Create map tile from a dataset."""
             tms = self.supported_tms.get(tileMatrixSetId)
 
-            with self.backend(
-                search,
-                tms=tms,
-                **backend_params.as_dict(),
-            ) as src_dst:
-                tile = src_dst.tile(
-                    x=x,
-                    y=y,
-                    z=z,
-                    assets=self.assets,
-                    tilesize=tilesize,
-                    search_options=assets_accessor_params.as_dict(),
-                    max_items=self.max_items,
-                    resolution_scale=self.resolution_scale,
-                    resampling=self.resampling,
-                    viewport_width=self.viewport_width,
-                    viewport_height=self.viewport_height,
-                    viewport_resampling=self.viewport_resampling,
-                    stac_search_kwargs=self.stac_search_kwargs,
-                    max_nodata_ratio=self.max_nodata_ratio,
-                )
+            def compute(batch: list[_TileRequest]) -> None:
+                # One STAC search + one asset read for the whole batch of
+                # adjacent tiles; each request then slices out its own tile.
+                with self.backend(
+                    search,
+                    tms=tms,
+                    **backend_params.as_dict(),
+                ) as src_dst:
+                    results = src_dst.stack_tiles(
+                        z,
+                        [(r.x, r.y) for r in batch],
+                        assets=self.assets,
+                        tilesize=tilesize,
+                        search_options=assets_accessor_params.as_dict(),
+                        max_items=self.max_items,
+                        resolution_scale=self.resolution_scale,
+                        resampling=self.resampling,
+                        viewport_width=self.viewport_width,
+                        viewport_height=self.viewport_height,
+                        viewport_resampling=self.viewport_resampling,
+                        stac_search_kwargs=self.stac_search_kwargs,
+                        max_nodata_ratio=self.max_nodata_ratio,
+                    )
+                for r in batch:
+                    result = results[(r.x, r.y)]
+                    if isinstance(result, NoAssetFoundError):
+                        r.error = result
+                    else:
+                        r.array = result[0]
+
+            req = self._batcher.submit(z, x, y, compute)
+            if req.error is not None:
+                raise req.error
+            if req.array is None:
+                raise RuntimeError(f"Tile batch for {z}-{x}-{y} returned no array")
+            array = req.array
 
             with dask.config.set(
                 scheduler="threads",
                 num_workers=_DEFAULT_DASK_WORKERS,
             ):
-                image = self.array_to_image(tile[0])
+                image = self.array_to_image(array)
                 if self.nodata_transparent:
-                    image = _apply_nodata_transparency(image, tile[0])
+                    image = _apply_nodata_transparency(image, array)
 
             content, media_type = self.render_func(
                 image,
