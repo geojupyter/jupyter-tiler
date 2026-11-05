@@ -127,6 +127,7 @@ class TiTilerServer(_FastApiTileServer):
         viewport_height: int = 0,
         viewport_resampling: InterpOptions = "linear",
         stac_search_kwargs: dict[str, Any] | None = None,
+        max_nodata_ratio: float | None = None,
     ) -> str:
         """Add a STAC API source to the TiTiler server."""
         if max_items < 1:
@@ -135,6 +136,8 @@ class TiTilerServer(_FastApiTileServer):
             raise ValueError("resolution_scale must be > 0")
         if viewport_width < 0 or viewport_height < 0:
             raise ValueError("viewport_width and viewport_height must be >= 0")
+        if max_nodata_ratio is not None and not 0 <= max_nodata_ratio <= 1:
+            raise ValueError("max_nodata_ratio must be between 0 and 1")
         normalized_resampling = _normalize_resampling(resampling)
 
         await self.start()
@@ -155,6 +158,7 @@ class TiTilerServer(_FastApiTileServer):
             viewport_resampling=viewport_resampling,
             array_to_image=array_to_image,
             stac_search_kwargs=stac_search_kwargs,
+            max_nodata_ratio=max_nodata_ratio,
         )
 
         prefix = f"{self._base_url}/{source_id}/collections/{collection_id}"
@@ -197,6 +201,7 @@ class TiTilerServer(_FastApiTileServer):
         viewport_height: int = 0,
         viewport_resampling: InterpOptions = "linear",
         stac_search_kwargs: dict[str, Any] | None = None,
+        max_nodata_ratio: float | None = None,
     ) -> None:
         if self._app is None:
             raise RuntimeError(f"{_not_initialized_message} {_found_bug_message}")
@@ -213,5 +218,6 @@ class TiTilerServer(_FastApiTileServer):
             array_to_image=array_to_image,
             router_prefix=f"/{source_id}",
             stac_search_kwargs=stac_search_kwargs,
+            max_nodata_ratio=max_nodata_ratio,
         )
         self._app.include_router(tiler.router, prefix=f"/{source_id}")

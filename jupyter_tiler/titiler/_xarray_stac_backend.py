@@ -81,6 +81,28 @@ def _slice_to_bounds(
     return data_array.sel({x_name: x_slice, y_name: y_slice})
 
 
+def _filter_items_by_nodata(
+    data_array: xarray.DataArray,
+    max_nodata_ratio: float,
+) -> tuple[xarray.DataArray, np.ndarray]:
+    """Drop STAC items (``time`` slices) with too much nodata in the tile.
+
+    Each ``time`` slice of a stackstac result comes from one STAC item. The
+    nodata ratio of an item is the fraction of null pixels over all its
+    non-``time`` dimensions (bands, y, x) within the tile.
+
+    Returns the filtered DataArray and a boolean mask of the kept items,
+    aligned with the ``time`` dimension.
+    """
+    if "time" not in data_array.dims:
+        return data_array, np.ones(1, dtype=bool)
+
+    reduce_dims = [dim for dim in data_array.dims if dim != "time"]
+    nodata_ratio = data_array.isnull().mean(dim=reduce_dims).compute()
+    keep = (nodata_ratio <= max_nodata_ratio).values
+    return data_array.isel(time=np.flatnonzero(keep)), keep
+
+
 def _resample_dataarray_to_viewport(  # noqa: PLR0913
     data_array: xarray.DataArray,
     *,
@@ -200,6 +222,7 @@ class XarraySTACAPIBackend(STACAPIBackend):
         viewport_height: int = 0,
         viewport_resampling: InterpOptions = "linear",
         stac_search_kwargs: dict[str, Any] | None = None,
+        max_nodata_ratio: float | None = None,
     ) -> tuple[xarray.DataArray, list[str]]:
         """Get Tile from multiple assets."""
         timings = []
@@ -247,6 +270,18 @@ class XarraySTACAPIBackend(STACAPIBackend):
             resampling=resampling,
         )
         xr_stack = _slice_to_bounds(xr_stack, bounds)
+
+        if max_nodata_ratio is not None:
+            xr_stack, keep = _filter_items_by_nodata(xr_stack, max_nodata_ratio)
+            mosaic_assets = [
+                item for item, kept in zip(mosaic_assets, keep, strict=True) if kept
+            ]
+            if not mosaic_assets:
+                raise NoAssetFoundError(
+                    f"All assets for tile {z}-{x}-{y} have more than "
+                    f"{max_nodata_ratio:.0%} nodata"
+                )
+
         xr_stack = _resample_dataarray_to_viewport(
             xr_stack,
             x_name="x",
@@ -304,6 +339,9 @@ class XarraySTACTilerFactory(BaseFactory):
     viewport_height: int = 0
     viewport_resampling: InterpOptions = "linear"
     stac_search_kwargs: dict[str, Any] | None = None
+    # If set, STAC items whose nodata fraction within a tile exceeds this
+    # ratio are dropped before rendering. None disables the filtering.
+    max_nodata_ratio: float | None = None
 
     def register_routes(self) -> None:
         self.tile()
@@ -404,6 +442,7 @@ class XarraySTACTilerFactory(BaseFactory):
                     viewport_height=self.viewport_height,
                     viewport_resampling=self.viewport_resampling,
                     stac_search_kwargs=self.stac_search_kwargs,
+                    max_nodata_ratio=self.max_nodata_ratio,
                 )
 
             with dask.config.set(
