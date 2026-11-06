@@ -6,11 +6,13 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from threading import BoundedSemaphore, Condition, Event, Lock
 from typing import Annotated, Any, Literal
+from urllib.parse import parse_qs, urlparse
 
 import attr
 import dask
 import numpy as np
 import pystac
+import requests
 import stackstac
 import xarray
 from attrs import define
@@ -83,22 +85,51 @@ _TILE_COMPUTE_SEMAPHORE = BoundedSemaphore(4)
 _STAC_HTTP_TIMEOUT = 30
 
 # Microsoft Planetary Computer requires SAS-signed asset URLs (unsigned ones
-# return 409). Signing is done with the optional `planetary-computer` package.
+# return 409). We sign Azure Blob hrefs directly against PC's SAS token
+# endpoint, no extra dependency needed.
 _PLANETARY_COMPUTER_HOST = "planetarycomputer.microsoft.com"
+_PC_SAS_TOKEN_URL = "https://planetarycomputer.microsoft.com/api/sas/v1/token"  # noqa: S105
+_PC_BLOB_DOMAIN = ".blob.core.windows.net"
+_sas_token_cache: Any = TTLCache(maxsize=64, ttl=3000)
+_sas_token_lock = Lock()
+
+
+def _pc_sas_token(account: str, container: str) -> str:
+    """Fetch (and cache) a SAS token for an Azure account/container from PC."""
+    key = hashkey(account, container)
+    with _sas_token_lock:
+        cached: str | None = _sas_token_cache.get(key)
+    if cached is not None:
+        return cached
+    url = f"{_PC_SAS_TOKEN_URL}/{account}/{container}"
+    resp = requests.get(
+        url, headers={"Accept": "application/json"}, timeout=_STAC_HTTP_TIMEOUT
+    )
+    resp.raise_for_status()
+    token = str(resp.json()["token"])
+    with _sas_token_lock:
+        _sas_token_cache[key] = token
+    return token
+
+
+def _sign_blob_url(href: str) -> str:
+    """Append a SAS token to an Azure Blob URL; other URLs are unchanged."""
+    parsed = urlparse(href)
+    if not parsed.netloc.endswith(_PC_BLOB_DOMAIN):
+        return href
+    if {"st", "se", "sp", "sig"} & set(parse_qs(parsed.query)):
+        return href  # already signed
+    account = parsed.netloc.split(".")[0]
+    container = parsed.path.lstrip("/").split("/", 1)[0]
+    sep = "&" if parsed.query else "?"
+    return f"{href}{sep}{_pc_sas_token(account, container)}"
 
 
 def _sign_planetary_computer_items(items: list[pystac.Item]) -> list[pystac.Item]:
     """SAS-sign the asset hrefs of STAC items hosted on Planetary Computer."""
-    try:
-        import planetary_computer  # noqa: PLC0415
-    except ImportError as e:
-        raise RuntimeError(
-            f"Assets from {_PLANETARY_COMPUTER_HOST} require SAS signing; "
-            "install the 'planetary-computer' package "
-            "(e.g. `pip install planetary-computer`)."
-        ) from e
     for item in items:
-        planetary_computer.sign_inplace(item)
+        for asset in item.assets.values():
+            asset.href = _sign_blob_url(asset.href)
     return items
 
 

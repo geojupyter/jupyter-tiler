@@ -1,7 +1,5 @@
 import asyncio
 import io
-import sys
-import types
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -263,7 +261,7 @@ async def test_multiple_stac_tiles_load_concurrently(
     # No STAC API in tests: fake the ItemSearch the backend performs, so the
     # real get_assets (including Planetary Computer SAS signing) still runs.
     search_calls: list[dict[str, Any]] = []
-    signed_items: list[pystac.Item] = []
+    sign_calls: list[list[pystac.Item]] = []
 
     class FakeItemSearch:
         def __init__(
@@ -279,10 +277,16 @@ async def test_multiple_stac_tiles_load_concurrently(
 
     monkeypatch.setattr(backend_module, "ItemSearch", FakeItemSearch)
 
-    # Planetary Computer URLs trigger SAS signing via the (faked) package
-    fake_pc = types.ModuleType("planetary_computer")
-    fake_pc.sign_inplace = signed_items.append  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "planetary_computer", fake_pc)
+    # Planetary Computer URLs trigger SAS signing; spy on the signer and make
+    # the token fetch a no-op (local COG hrefs are not blob URLs anyway)
+    real_sign = backend_module._sign_planetary_computer_items
+
+    def spy_sign(items: list[pystac.Item]) -> list[pystac.Item]:
+        sign_calls.append(items)
+        return real_sign(items)
+
+    monkeypatch.setattr(backend_module, "_sign_planetary_computer_items", spy_sign)
+    monkeypatch.setattr(backend_module, "_pc_sas_token", lambda *_args: "sig=fake")
 
     tile_url = await clean_titiler_server.add_stac_array(
         stac_url="https://planetarycomputer.microsoft.com/api/stac/v1",
@@ -318,7 +322,7 @@ async def test_multiple_stac_tiles_load_concurrently(
     # bounds; the out-of-extent tile fired afterwards forms its own batch
     assert len(search_calls) == 2
     # the Planetary Computer URL triggered SAS signing of the returned items
-    assert signed_items
+    assert sign_calls
 
     assert len(responses) == 9
     any_transparent = False
@@ -335,9 +339,10 @@ async def test_multiple_stac_tiles_load_concurrently(
     assert any_transparent
 
 
-def test_sign_planetary_computer_items_calls_sign_inplace(
+def test_sign_planetary_computer_items_signs_blob_hrefs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(backend_module, "_pc_sas_token", lambda *_args: "sig=fake")
     item = pystac.Item(
         id="item-0",
         collection="test",
@@ -346,23 +351,13 @@ def test_sign_planetary_computer_items_calls_sign_inplace(
         datetime=datetime(2024, 6, 15, tzinfo=UTC),
         properties={},
     )
-    item.add_asset(
-        "B03", pystac.Asset(href="https://sentinel2l2a01.blob.core.windows.net/x/y.tif")
-    )
-    calls: list[pystac.Item] = []
-    fake_pc = types.ModuleType("planetary_computer")
-    fake_pc.sign_inplace = calls.append  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "planetary_computer", fake_pc)
+    blob_href = "https://sentinel2l2a01.blob.core.windows.net/sentinel-s2-l2/x/y.tif"
+    item.add_asset("B03", pystac.Asset(href=blob_href))
+    item.add_asset("preview", pystac.Asset(href="https://example.com/preview.png"))
+    item.add_asset("signed", pystac.Asset(href=blob_href + "?sig=already"))
 
     out = _sign_planetary_computer_items([item])
 
-    assert out == [item]
-    assert calls == [item]
-
-
-def test_sign_planetary_computer_items_requires_package(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setitem(sys.modules, "planetary_computer", None)
-    with pytest.raises(RuntimeError, match="planetary-computer"):
-        _sign_planetary_computer_items([])
+    assert out[0].assets["B03"].href == blob_href + "?sig=fake"
+    assert out[0].assets["preview"].href == "https://example.com/preview.png"
+    assert out[0].assets["signed"].href == blob_href + "?sig=already"

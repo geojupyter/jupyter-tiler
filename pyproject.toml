@@ -81,7 +81,6 @@ play = [
     "ipyleaflet",
     "mapclassify",
     "odc-stac",
-    "planetary-computer",
     "pystac-client",
 ]
 
@@ -119,7 +118,7 @@ module = [
     "affine",
     "anycorn.*",
     "geopandas.*",
-    "planetary_computer",
+    "requests",
     "rio_tiler.*",
     "titiler.*",
     "xpublish.*",
