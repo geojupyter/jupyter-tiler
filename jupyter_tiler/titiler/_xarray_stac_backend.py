@@ -82,9 +82,29 @@ _TILE_COMPUTE_SEMAPHORE = BoundedSemaphore(4)
 # Timeout (seconds) for STAC API search requests.
 _STAC_HTTP_TIMEOUT = 30
 
+# Microsoft Planetary Computer requires SAS-signed asset URLs (unsigned ones
+# return 409). Signing is done with the optional `planetary-computer` package.
+_PLANETARY_COMPUTER_HOST = "planetarycomputer.microsoft.com"
+
+
+def _sign_planetary_computer_items(items: list[pystac.Item]) -> list[pystac.Item]:
+    """SAS-sign the asset hrefs of STAC items hosted on Planetary Computer."""
+    try:
+        import planetary_computer  # noqa: PLC0415
+    except ImportError as e:
+        raise RuntimeError(
+            f"Assets from {_PLANETARY_COMPUTER_HOST} require SAS signing; "
+            "install the 'planetary-computer' package "
+            "(e.g. `pip install planetary-computer`)."
+        ) from e
+    for item in items:
+        planetary_computer.sign_inplace(item)
+    return items
+
+
 # Tile batching: concurrent same-z tile requests (what a map viewport fires)
 # are coalesced into a single STAC search + asset read over their union bounds.
-_BATCH_WINDOW_SECONDS = 0.1  # how long the leader waits for more tiles to join
+_BATCH_WINDOW_SECONDS = 1  # how long the leader waits for more tiles to join
 _MAX_BATCH_TILES = 25
 _BATCH_WAIT_TIMEOUT = 120.0  # max time a follower waits for its batch to finish
 
@@ -355,7 +375,10 @@ class XarraySTACAPIBackend(STACAPIBackend):
         results = ItemSearch(
             f"{self.api_params['url']}/search", stac_io=stac_api_io, **params
         )
-        return list(results.items())
+        items = list(results.items())
+        if _PLANETARY_COMPUTER_HOST in self.api_params["url"]:
+            items = _sign_planetary_computer_items(items)
+        return items
 
     @staticmethod
     def _bbox_intersects(

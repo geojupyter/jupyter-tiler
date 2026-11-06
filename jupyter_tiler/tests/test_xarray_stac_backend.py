@@ -1,5 +1,7 @@
 import asyncio
 import io
+import sys
+import types
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -11,7 +13,6 @@ import pystac
 import pytest
 import rasterio
 import xarray as xr
-from geojson_pydantic.geometries import Geometry
 from PIL import Image
 from rasterio.transform import from_origin
 from rio_tiler.models import ImageData
@@ -19,12 +20,13 @@ from titiler.core.resources.enums import ImageType
 from titiler.core.utils import render_image
 from xarray import DataArray
 
+from jupyter_tiler.titiler import _xarray_stac_backend as backend_module
 from jupyter_tiler.titiler._server import TiTilerServer
 from jupyter_tiler.titiler._xarray_stac_backend import (
-    XarraySTACAPIBackend,
     _apply_nodata_transparency,
     _filter_items_by_nodata,
     _nodata_alpha_mask,
+    _sign_planetary_computer_items,
 )
 
 
@@ -258,21 +260,32 @@ async def test_multiple_stac_tiles_load_concurrently(
     all load: 200 responses, valid PNGs, and real (non-transparent) pixels."""
     items = _make_local_stac_items(tmp_path)
 
-    # No STAC API in tests: every tile search returns the local items
-    search_calls: list[Geometry] = []
+    # No STAC API in tests: fake the ItemSearch the backend performs, so the
+    # real get_assets (including Planetary Computer SAS signing) still runs.
+    search_calls: list[dict[str, Any]] = []
+    signed_items: list[pystac.Item] = []
 
-    def fake_get_assets(
-        self: XarraySTACAPIBackend,
-        geom: Geometry,
-        **kwargs: Any,  # noqa: ANN401
-    ) -> list[pystac.Item]:
-        search_calls.append(geom)
-        return items
+    class FakeItemSearch:
+        def __init__(
+            self,
+            _url: str,
+            _stac_io: Any = None,  # noqa: ANN401
+            **params: Any,  # noqa: ANN401
+        ) -> None:
+            search_calls.append(params)
 
-    monkeypatch.setattr(XarraySTACAPIBackend, "get_assets", fake_get_assets)
+        def items(self) -> list[pystac.Item]:
+            return items
+
+    monkeypatch.setattr(backend_module, "ItemSearch", FakeItemSearch)
+
+    # Planetary Computer URLs trigger SAS signing via the (faked) package
+    fake_pc = types.ModuleType("planetary_computer")
+    fake_pc.sign_inplace = signed_items.append  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "planetary_computer", fake_pc)
 
     tile_url = await clean_titiler_server.add_stac_array(
-        stac_url="http://fake-stac",
+        stac_url="https://planetarycomputer.microsoft.com/api/stac/v1",
         array_to_image=_ndwi,
         collection_id="test",
         assets=["green", "nir"],
@@ -304,6 +317,8 @@ async def test_multiple_stac_tiles_load_concurrently(
     # the 3x3 burst was coalesced into a single STAC search over the union
     # bounds; the out-of-extent tile fired afterwards forms its own batch
     assert len(search_calls) == 2
+    # the Planetary Computer URL triggered SAS signing of the returned items
+    assert signed_items
 
     assert len(responses) == 9
     any_transparent = False
@@ -318,3 +333,36 @@ async def test_multiple_stac_tiles_load_concurrently(
         # the nodata corner of the rasters must be rendered transparent somewhere
         any_transparent |= bool((rgba[:, :, 3] == 0).any())
     assert any_transparent
+
+
+def test_sign_planetary_computer_items_calls_sign_inplace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    item = pystac.Item(
+        id="item-0",
+        collection="test",
+        geometry={"type": "Point", "coordinates": [0, 0]},
+        bbox=[0, 0, 1, 1],
+        datetime=datetime(2024, 6, 15, tzinfo=UTC),
+        properties={},
+    )
+    item.add_asset(
+        "B03", pystac.Asset(href="https://sentinel2l2a01.blob.core.windows.net/x/y.tif")
+    )
+    calls: list[pystac.Item] = []
+    fake_pc = types.ModuleType("planetary_computer")
+    fake_pc.sign_inplace = calls.append  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "planetary_computer", fake_pc)
+
+    out = _sign_planetary_computer_items([item])
+
+    assert out == [item]
+    assert calls == [item]
+
+
+def test_sign_planetary_computer_items_requires_package(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setitem(sys.modules, "planetary_computer", None)
+    with pytest.raises(RuntimeError, match="planetary-computer"):
+        _sign_planetary_computer_items([])
