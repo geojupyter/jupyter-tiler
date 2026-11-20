@@ -1,11 +1,15 @@
+from collections.abc import Callable
 from functools import cache
 from typing import Any
 
+from rasterio.enums import Resampling
+from rio_tiler.models import ImageData
 from rio_tiler.types import ColorMapType
 from titiler.core.algorithm.base import BaseAlgorithm
 from xarray import DataArray
+from xarray.core.types import InterpOptions
 
-from jupyter_tiler.titiler._server import TiTilerServer
+from jupyter_tiler.titiler._server import ResamplingMethod, TiTilerServer
 
 
 @cache
@@ -61,6 +65,126 @@ async def add_data_array(  # noqa: PLR0913
         tile_dim_scale=tile_dim_scale,
         algorithm=algorithm,
         **kwargs,
+    )
+
+
+async def add_stac_array(  # noqa: PLR0913
+    stac_url: str,
+    *,
+    collection_id: str,
+    array_to_image: Callable[[DataArray], ImageData],
+    assets: list[str] | None = None,
+    max_items: int = 4,
+    resolution_scale: float = 1.0,
+    resampling: ResamplingMethod | Resampling = "nearest",
+    viewport_width: int = 0,
+    viewport_height: int = 0,
+    viewport_resampling: InterpOptions = "linear",
+    stac_search_kwargs: dict[str, Any] | None = None,
+    max_nodata_ratio: float | None = None,
+    nodata_transparent: bool = True,
+) -> str:
+    """Add a STAC API source to the TiTiler server.
+
+    This registers a new tile endpoint backed by a STAC API search and a user-provided
+    ``array_to_image`` callable which converts the stacked ``DataArray``
+    into ``ImageData``.
+
+    Args:
+        stac_url: Root STAC API URL.
+        collection_id: STAC collection ID used in the tile URL path.
+        array_to_image: Callable converting a stackstac ``DataArray`` to ``ImageData``.
+        assets: Optional STAC asset names passed to stackstac. Only selection by
+            asset ID is supported. If ``None``, all assets of each item are used.
+        max_items: Max number of STAC items to combine per tile. Lower is faster.
+        resolution_scale: Multiplier applied to stackstac output resolution.
+            Values greater than ``1`` produce a lower resolution output, reducing
+            detail and improving performance.
+        resampling: Resampling method applied by stackstac when reprojecting the
+            items onto the tile grid. One of the ``rasterio.enums.Resampling``
+            member names, e.g. ``nearest`` or ``bilinear``.
+        viewport_width: Optional target viewport width in pixels for post-stack
+            downsampling. ``0`` disables viewport resampling.
+        viewport_height: Optional target viewport height in pixels for post-stack
+            downsampling. ``0`` disables viewport resampling.
+        viewport_resampling: Interpolation method for viewport downsampling.
+            Typical values are ``linear`` or ``nearest``.
+        stac_search_kwargs: Extra STAC API search parameters applied to every tile
+            request, e.g. ``{"datetime": "2024-01-01/2024-12-31", "query": {...}}``.
+            See the `ItemSearch API from pystac-client
+            <https://pystac-client.readthedocs.io/en/stable/api.html#pystac_client.ItemSearch>`_
+            for details.
+        max_nodata_ratio: If set, STAC items whose nodata fraction within a tile
+            exceeds this ratio (between 0 and 1) are dropped before rendering,
+            e.g. ``0.9`` drops items that are more than 90% nodata in the tile.
+            ``None`` disables the filtering.
+        nodata_transparent: If ``True`` (default), pixels that are nodata in the
+            stacked ``DataArray`` are rendered transparent (alpha 0) in the tile,
+            combined with any alpha mask returned by ``array_to_image``. Set to
+            ``False`` to render nodata pixels with their computed color.
+
+    Returns:
+        A URL template pointing to the new STAC tile endpoint.
+
+    Note:
+        ``viewport_width``/``viewport_height`` exist because stackstac must pick a
+        single output resolution for the stacked array, defaulting to the finest
+        source resolution which can be much finer than what is visible on screen.
+        Downsampling the stack to roughly the viewport size avoids computing (and
+        transferring) pixels that are never displayed. Since the viewport can
+        change dynamically (pan/zoom/resize), these are per-source defaults; pass
+        ``0`` to disable and keep the native tile resolution.
+
+    Example:
+        NDWI process function:
+
+        .. code-block:: python
+
+            import numpy as np
+            from rio_tiler.models import ImageData
+
+            def ndwi_process(data):
+                if "time" in data.dims:
+                    # pick one scene OR use median over time; choose one
+                    data = data.isel(time=0)
+                    # data = data.median(dim="time", skipna=True)
+
+                green = data.sel(band="green").data.astype(np.float32)
+                nir = data.sel(band="nir").data.astype(np.float32)
+
+                ndwi = (green - nir) / (green + nir + 1e-6)
+                ndwi = np.asarray(ndwi)  # drop masked-array dimensional surprises
+                ndwi = np.nan_to_num(ndwi, nan=-1.0, posinf=1.0, neginf=-1.0)
+
+                ndwi_01 = np.clip((ndwi + 1.0) / 2.0, 0.0, 1.0)
+                pixels = (ndwi_01 * 255).astype(np.uint8)  # 2D
+                return ImageData(pixels[np.newaxis, :, :])  # 3D: 1, y, x
+
+            raster_url = await add_stac_array(
+                "https://earth-search.aws.element84.com/v1",
+                collection_id="sentinel-2-l2a",
+                array_to_image=ndwi_process,
+                assets=["green", "nir"],
+                stac_search_kwargs={
+                    "datetime": "2024-06-01/2024-09-30",
+                    "query": {"eo:cloud_cover": {"lt": 20}},
+                },
+            )
+    """
+    return await _get_server().add_stac_array(
+        stac_url=stac_url,
+        collection_id=collection_id,
+        array_to_image=array_to_image,
+        assets=assets,
+        max_items=max_items,
+        resolution_scale=resolution_scale,
+        resampling=resampling,
+        viewport_width=viewport_width,
+        viewport_height=viewport_height,
+        viewport_resampling=viewport_resampling,
+        stac_search_kwargs=stac_search_kwargs,
+        max_nodata_ratio=max_nodata_ratio,
+        nodata_transparent=nodata_transparent,
     )
 
 

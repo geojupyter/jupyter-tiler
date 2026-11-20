@@ -42,11 +42,36 @@ class _FastApiTileServer(ABC):
                 " Please see the docs!"
             )
 
-        return [
-            {"path": route.path, "name": route.name}
-            for route in self._app.router.routes
-            if isinstance(route, APIRoute)
-        ]
+        return self._collect_routes(self._app.routes)
+
+    def _collect_routes(
+        self,
+        routes: list[Any],
+        *,
+        prefix: str = "",
+    ) -> list[dict[str, Any]]:
+        """Flatten nested FastAPI route containers into concrete APIRoute entries."""
+        collected: list[dict[str, Any]] = []
+
+        for route in routes:
+            if isinstance(route, APIRoute):
+                collected.append({"path": f"{prefix}{route.path}", "name": route.name})
+                continue
+
+            next_routes = getattr(route, "routes", None)
+            next_prefix = prefix
+
+            if next_routes is None:
+                original_router = getattr(route, "original_router", None)
+                include_context = getattr(route, "include_context", None)
+                if original_router is not None and hasattr(original_router, "routes"):
+                    next_routes = original_router.routes
+                    next_prefix = f"{prefix}{getattr(include_context, 'prefix', '')}"
+
+            if next_routes is not None:
+                collected.extend(self._collect_routes(next_routes, prefix=next_prefix))
+
+        return collected
 
     async def start(self) -> None:
         """Start the tile server."""

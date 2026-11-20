@@ -1,8 +1,13 @@
 import uuid
+from collections.abc import Callable
+from typing import Any, Literal
 from urllib.parse import urlencode
 
 from fastapi import FastAPI
+from rasterio.enums import Resampling
+from rio_tiler.errors import NoAssetFoundError
 from rio_tiler.io.xarray import XarrayReader
+from rio_tiler.models import ImageData
 from rio_tiler.types import ColorMapType
 from titiler.core.algorithm import algorithms as default_algorithms
 from titiler.core.algorithm.base import BaseAlgorithm
@@ -10,6 +15,7 @@ from titiler.core.dependencies import DefaultDependency
 from titiler.core.errors import DEFAULT_STATUS_CODES, add_exception_handlers
 from titiler.core.factory import TilerFactory
 from xarray import DataArray
+from xarray.core.types import InterpOptions
 
 from jupyter_tiler._base_server import _FastApiTileServer
 from jupyter_tiler.constants._messages import (
@@ -17,6 +23,39 @@ from jupyter_tiler.constants._messages import (
     _not_initialized_message,
 )
 from jupyter_tiler.titiler._query import _build_tile_query_params
+from jupyter_tiler.titiler._xarray_stac_backend import XarraySTACTilerFactory
+
+# All names of `rasterio.enums.Resampling` members. Kept in sync with rasterio
+# by a test in `tests/test_titiler_server.py`.
+ResamplingMethod = Literal[
+    "nearest",
+    "bilinear",
+    "cubic",
+    "cubic_spline",
+    "lanczos",
+    "average",
+    "mode",
+    "gauss",
+    "max",
+    "min",
+    "med",
+    "q1",
+    "q3",
+    "sum",
+    "rms",
+]
+
+
+def _normalize_resampling(value: ResamplingMethod | Resampling) -> Resampling:
+    """Normalize a resampling value to a rasterio Resampling enum."""
+    if isinstance(value, Resampling):
+        return value
+
+    try:
+        return Resampling[value]
+    except KeyError as e:
+        valid = ", ".join(Resampling.__members__.keys())
+        raise ValueError(f"Invalid resampling '{value}'. Valid values: {valid}") from e
 
 
 class TiTilerServer(_FastApiTileServer):
@@ -33,7 +72,12 @@ class TiTilerServer(_FastApiTileServer):
             docs_url=None,
             redoc_url=None,
         )
-        add_exception_handlers(app, DEFAULT_STATUS_CODES)
+        # Tiles with no STAC items are a normal case (e.g. ocean tiles), so
+        # report them as 404 instead of the default 500, like map clients expect.
+        add_exception_handlers(
+            app,
+            {**DEFAULT_STATUS_CODES, NoAssetFoundError: 404},
+        )
         return app
 
     async def add_data_array(  # noqa: PLR0913
@@ -75,6 +119,59 @@ class TiTilerServer(_FastApiTileServer):
             f"?{urlencode(params)}"
         )
 
+    async def add_stac_array(  # noqa: PLR0913
+        self,
+        stac_url: str,
+        *,
+        collection_id: str,
+        array_to_image: Callable[[DataArray], ImageData],
+        assets: list[str] | None = None,
+        max_items: int = 4,
+        resolution_scale: float = 1.0,
+        resampling: ResamplingMethod | Resampling = "nearest",
+        viewport_width: int = 0,
+        viewport_height: int = 0,
+        viewport_resampling: InterpOptions = "linear",
+        stac_search_kwargs: dict[str, Any] | None = None,
+        max_nodata_ratio: float | None = None,
+        nodata_transparent: bool = True,
+    ) -> str:
+        """Add a STAC API source to the TiTiler server."""
+        if max_items < 1:
+            raise ValueError("max_items must be >= 1")
+        if resolution_scale <= 0:
+            raise ValueError("resolution_scale must be > 0")
+        if viewport_width < 0 or viewport_height < 0:
+            raise ValueError("viewport_width and viewport_height must be >= 0")
+        if max_nodata_ratio is not None and not 0 <= max_nodata_ratio <= 1:
+            raise ValueError("max_nodata_ratio must be between 0 and 1")
+        normalized_resampling = _normalize_resampling(resampling)
+
+        await self.start()
+
+        if self._port is None:
+            raise RuntimeError(f"{_not_initialized_message} {_found_bug_message}")
+
+        source_id = str(uuid.uuid4())
+        self._add_stac_array_route(
+            source_id=source_id,
+            stac_url=stac_url,
+            assets=assets,
+            max_items=max_items,
+            resolution_scale=resolution_scale,
+            resampling=normalized_resampling,
+            viewport_width=viewport_width,
+            viewport_height=viewport_height,
+            viewport_resampling=viewport_resampling,
+            array_to_image=array_to_image,
+            stac_search_kwargs=stac_search_kwargs,
+            max_nodata_ratio=max_nodata_ratio,
+            nodata_transparent=nodata_transparent,
+        )
+
+        prefix = f"{self._base_url}/{source_id}/collections/{collection_id}"
+        return f"{prefix}/tiles/WebMercatorQuad/{{z}}/{{x}}/{{y}}.png"
+
     def _add_data_array_route(  # type: ignore[override]
         self,
         *,
@@ -95,5 +192,42 @@ class TiTilerServer(_FastApiTileServer):
             path_dependency=lambda: data_array,
             reader_dependency=DefaultDependency,
             process_dependency=algorithms.dependency,
+        )
+        self._app.include_router(tiler.router, prefix=f"/{source_id}")
+
+    def _add_stac_array_route(  # noqa: PLR0913
+        self,
+        *,
+        source_id: str,
+        stac_url: str,
+        array_to_image: Callable[[DataArray], ImageData],
+        assets: list[str] | None = None,
+        max_items: int = 4,
+        resolution_scale: float = 1.0,
+        resampling: Resampling = Resampling.nearest,
+        viewport_width: int = 0,
+        viewport_height: int = 0,
+        viewport_resampling: InterpOptions = "linear",
+        stac_search_kwargs: dict[str, Any] | None = None,
+        max_nodata_ratio: float | None = None,
+        nodata_transparent: bool = True,
+    ) -> None:
+        if self._app is None:
+            raise RuntimeError(f"{_not_initialized_message} {_found_bug_message}")
+
+        tiler = XarraySTACTilerFactory(
+            stac_url=stac_url,
+            assets=assets,
+            max_items=max_items,
+            resolution_scale=resolution_scale,
+            resampling=resampling,
+            viewport_width=viewport_width,
+            viewport_height=viewport_height,
+            viewport_resampling=viewport_resampling,
+            array_to_image=array_to_image,
+            router_prefix=f"/{source_id}",
+            stac_search_kwargs=stac_search_kwargs,
+            max_nodata_ratio=max_nodata_ratio,
+            nodata_transparent=nodata_transparent,
         )
         self._app.include_router(tiler.router, prefix=f"/{source_id}")
