@@ -111,7 +111,7 @@ class TestTiTilerServer:
                 stac_url="https://planetarycomputer.microsoft.com/api/stac/v1",
                 array_to_image=passthrough,
                 collection_id="sentinel-2-l2a",
-                resampling="not-a-resampling",
+                resampling="not-a-resampling",  # type: ignore[arg-type]
             )
 
 
