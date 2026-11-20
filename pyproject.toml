@@ -61,6 +61,8 @@ test = [
     "pytest-cov",
     "pytest-jupyter[server]>=0.6.0",
     "types-cachetools",
+    "types-requests",
+    "types-rasterio",
 ]
 docs = [
     "myst-parser>=5.0.0",
@@ -118,15 +120,12 @@ module = [
     "affine",
     "anycorn.*",
     "geopandas.*",
-    "types-requests",
     "rio_tiler.*",
     "titiler.*",
     "xpublish.*",
     "stackstac",
     "stackstac.rio_env",
-    "types-rasterio",
-    "rasterio.enums",
-    "rasterio.transform",
+    "rasterio.*",
 ]
 ignore_missing_imports = true
 
