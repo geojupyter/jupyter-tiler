@@ -123,7 +123,7 @@ def test_resampling_method_literal_in_sync_with_rasterio() -> None:
 @pytest.mark.parametrize("name", [member.name for member in Resampling])
 def test_normalize_resampling_accepts_all_rasterio_names(name: str) -> None:
     """Every rasterio Resampling member name must be accepted and normalized."""
-    assert _normalize_resampling(name) is getattr(Resampling, name)
+    assert _normalize_resampling(name) is getattr(Resampling, name)  # type: ignore[arg-type]
 
 
 class TestTiTilerServerRestart:
